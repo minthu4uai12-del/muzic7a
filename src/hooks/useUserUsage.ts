@@ -167,26 +167,54 @@ export function useUserUsage() {
       throw new Error('Must be logged in to generate music');
     }
 
-    if (!usage || usage.remaining <= 0) {
-      throw new Error('No generations remaining. Please upgrade your plan.');
-    }
-
     try {
       setLoading(true);
       setError(null);
 
-      // Use the SunoAPI directly with multiple key rotation
-      console.log('🎵 Starting music generation with multiple API keys...');
-      const taskId = await sunoAPI.generateMusic(prompt, options);
+      // Call the Supabase Edge Function instead of direct API
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const session = await supabase.auth.getSession();
       
-      // Update usage after successful generation
+      if (!session.data.session?.access_token) {
+        throw new Error('No valid session token');
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/generate-music`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.data.session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt,
+          options
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Generation failed');
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Generation failed');
+      }
+      
+      console.log('🎵 Generation started successfully. Task ID:', result.taskId);
+      
+      // Refresh usage data to reflect the deduction
       await loadUsage();
-      return taskId;
+      return result.taskId;
       
     } catch (err: any) {
       console.error('Error generating music:', err);
       const errorMessage = err.message || 'Music generation failed';
       setError(errorMessage);
+      
+      // Refresh usage in case of error to get accurate count
+      await loadUsage();
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
@@ -199,13 +227,33 @@ export function useUserUsage() {
     }
 
     try {
-      // Use the SunoAPI directly for status checking
-      const statusData = await sunoAPI.getTaskStatus(taskId);
+      // Call the Supabase Edge Function for status checking
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const session = await supabase.auth.getSession();
+      
+      if (!session.data.session?.access_token) {
+        throw new Error('No valid session token');
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/check-generation`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.data.session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ taskId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to check generation status');
+      }
+
+      const result = await response.json();
       
       return {
-        status: statusData.status,
-        tracks: statusData.response?.sunoData || [],
-        error: statusData.errorMessage
+        status: result.status,
+        tracks: result.data || [],
+        error: result.error
       };
       
     } catch (err: any) {

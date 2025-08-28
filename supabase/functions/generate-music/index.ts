@@ -66,6 +66,65 @@ serve(async (req) => {
       )
     }
 
+    // Check user's current usage and limits
+    const { data: subscription, error: subError } = await supabaseClient
+      .from('user_subscriptions')
+      .select('*')
+      .eq('user_id', user.id)
+      .single()
+
+    if (subError && subError.code !== 'PGRST116') {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Failed to check user subscription' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // If no subscription exists, create default free plan
+    let userSubscription = subscription
+    if (!subscription) {
+      const { data: newSub, error: createError } = await supabaseClient
+        .from('user_subscriptions')
+        .insert({
+          user_id: user.id,
+          plan_type: 'free',
+          monthly_limit: 1,
+          current_usage: 0
+        })
+        .select()
+        .single()
+
+      if (createError) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to create user subscription' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      userSubscription = newSub
+    }
+
+    // Check if user has remaining generations
+    const remaining = userSubscription.monthly_limit - userSubscription.current_usage
+    if (remaining <= 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'No generations remaining. Please upgrade your plan or wait for next month.' 
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Parse request body
+    const { prompt, options = {} }: GenerateRequest = await req.json()
+
+    if (!prompt?.trim()) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Prompt is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Get Music AI API key from environment
     const apiKey = Deno.env.get('MUSIC_AI_API_KEY')
     if (!apiKey) {
@@ -79,15 +138,25 @@ serve(async (req) => {
       )
     }
 
-    // Parse request body
-    const { prompt, options = {} }: GenerateRequest = await req.json()
+    // DEDUCT USAGE BEFORE MAKING THE API CALL
+    console.log(`Deducting 1 generation for user ${user.id}. Current usage: ${userSubscription.current_usage}`)
+    
+    const { error: updateError } = await supabaseClient
+      .from('user_subscriptions')
+      .update({
+        current_usage: userSubscription.current_usage + 1
+      })
+      .eq('user_id', user.id)
 
-    if (!prompt?.trim()) {
+    if (updateError) {
+      console.error('Failed to update usage:', updateError)
       return new Response(
-        JSON.stringify({ success: false, error: 'Prompt is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Failed to update usage count' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    console.log(`Usage updated successfully. New usage: ${userSubscription.current_usage + 1}`)
 
     // Make request to Kie AI
     const kieResponse = await fetch('https://api.kie.ai/api/v1/generate', {
@@ -111,17 +180,29 @@ serve(async (req) => {
     const result: KieAIResponse = await kieResponse.json()
 
     if (result.code !== 200) {
+      // If API call failed, revert the usage deduction
+      console.log('API call failed, reverting usage deduction')
+      await supabaseClient
+        .from('user_subscriptions')
+        .update({
+          current_usage: userSubscription.current_usage // Revert to original usage
+        })
+        .eq('user_id', user.id)
+
       return new Response(
         JSON.stringify({ success: false, error: `Generation failed: ${result.msg}` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
+    console.log(`Generation started successfully for user ${user.id}. Task ID: ${result.data.taskId}`)
+
     return new Response(
       JSON.stringify({
         success: true,
         taskId: result.data.taskId,
-        message: 'Generation started successfully'
+        message: 'Generation started successfully',
+        remainingGenerations: remaining - 1
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

@@ -84,6 +84,13 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
       return;
     }
 
+    // Check if user has remaining generations before starting
+    if (!usage || usage.remaining <= 0) {
+      setError('No generations remaining. Please upgrade your plan or wait for next month.');
+      setTimeout(() => setError(''), 5000);
+      return;
+    }
+
     setIsGenerating(true);
     setError('');
     
@@ -133,7 +140,9 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
     } catch (error) {
       console.error('Generation failed:', error);
       const errorMessage = error.message || 'Unknown error occurred';
-      if (errorMessage.includes('Music AI API key not configured')) {
+      if (errorMessage.includes('No generations remaining')) {
+        setError('No generations remaining. Please upgrade your plan or wait for next month.');
+      } else if (errorMessage.includes('Music AI API key not configured')) {
         setError('Music generation is not configured. Please contact support.');
       } else {
         setError(`Generation failed: ${errorMessage}`);
