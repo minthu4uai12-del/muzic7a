@@ -26,7 +26,7 @@ class SunoAPI {
     const keys: string[] = [];
     
     // Check for multiple key format: MUSIC_AI_API_KEY_1, MUSIC_AI_API_KEY_2, etc.
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= 20; i++) {
       const key = import.meta.env[`VITE_MUSIC_AI_API_KEY_${i}`];
       if (key && key.trim()) {
         keys.push(key.trim());
@@ -47,6 +47,7 @@ class SunoAPI {
     }
     
     this.apiKeys = keys;
+    console.log(`🔑 Loaded ${this.apiKeys.length} API keys from environment variables`);
   }
 
   private initializeKeyUsageTracking(): void {

@@ -198,14 +198,17 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
         <p className="text-gray-400 text-sm md:text-base">Create unique music tracks with artificial intelligence</p>
         
         {/* API Key Stats Button */}
-        {usage?.apiKeyStats && (
+        {usage?.apiKeyStats && usage.apiKeyStats.length > 0 && (
           <div className="mt-4">
             <button
               onClick={() => setShowApiStats(true)}
               className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors flex items-center space-x-2 mx-auto"
             >
               <Zap className="w-4 h-4" />
-              <span>API Keys: {usage.apiKeyStats.filter(k => k.isActive).length}/{usage.apiKeyStats.length} Active</span>
+              <span>
+                API Keys: {usage.apiKeyStats.filter(k => k.isActive).length}/{usage.apiKeyStats.length} Active
+                {usage.totalAvailableGenerations && ` (${usage.totalAvailableGenerations} available)`}
+              </span>
             </button>
           </div>
         )}

@@ -122,7 +122,12 @@ export function useUserUsage() {
       console.log('Usage result:', result);
       
       if (result.success) {
-        setUsage(updateUsageWithApiStats(result.usage));
+        const usageData = {
+          ...result.usage,
+          apiKeyStats: result.apiKeyStats || [],
+          totalAvailableGenerations: result.totalAvailableGenerations || 0
+        };
+        setUsage(updateUsageWithApiStats(usageData));
       } else {
         console.error('API error:', result);
         throw new Error(result.error || 'Failed to load usage data');
@@ -203,6 +208,18 @@ export function useUserUsage() {
       }
       
       console.log('🎵 Generation started successfully. Task ID:', result.taskId);
+      
+      // Update usage with API key stats if provided
+      if (result.apiKeyStats || result.totalAvailableGenerations) {
+        const updatedUsage = {
+          ...usage,
+          current: (usage?.current || 0) + 1,
+          remaining: Math.max(0, (usage?.remaining || 0) - 1),
+          apiKeyStats: result.apiKeyStats || usage?.apiKeyStats || [],
+          totalAvailableGenerations: result.totalAvailableGenerations || usage?.totalAvailableGenerations || 0
+        };
+        setUsage(updatedUsage);
+      }
       
       // Refresh usage data to reflect the deduction
       await loadUsage();
