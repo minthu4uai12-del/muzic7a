@@ -1,5 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,29 +52,41 @@ class MultiKeyManager {
   private loadApiKeysFromEnvironment(): void {
     const keys: string[] = []
     
+    console.log('🔍 Checking for API keys in environment...')
+    
     // Check for multiple key format: MUSIC_AI_API_KEY_1, MUSIC_AI_API_KEY_2, etc.
     for (let i = 1; i <= 20; i++) {
       const key = Deno.env.get(`MUSIC_AI_API_KEY_${i}`)
-      if (key && key.trim()) {
+      console.log(`Checking MUSIC_AI_API_KEY_${i}:`, key ? 'Found' : 'Not found')
+      if (key && key.trim() && key !== 'your_api_key_here') {
         keys.push(key.trim())
+        console.log(`✅ Added API key ${i}`)
       }
     }
     
     // Fallback to single key
     if (keys.length === 0) {
       const singleKey = Deno.env.get('MUSIC_AI_API_KEY')
-      if (singleKey && singleKey.trim()) {
+      console.log('Checking fallback MUSIC_AI_API_KEY:', singleKey ? 'Found' : 'Not found')
+      if (singleKey && singleKey.trim() && singleKey !== 'your_api_key_here') {
         keys.push(singleKey.trim())
+        console.log('✅ Added fallback API key')
       }
     }
     
     // Default fallback key if no environment variables
     if (keys.length === 0) {
+      console.log('⚠️ No API keys found in environment, using fallback')
       keys.push('4f52e3f37a67bb5aed649a471e9989b9') // Fallback key
     }
     
     this.apiKeys = keys
-    console.log(`📊 Loaded ${this.apiKeys.length} API keys from environment`)
+    console.log(`📊 Total API keys loaded: ${this.apiKeys.length}`)
+    
+    // Log first few characters of each key for debugging (without exposing full keys)
+    this.apiKeys.forEach((key, index) => {
+      console.log(`Key ${index + 1}: ${key.substring(0, 8)}...`)
+    })
   }
 
   private initializeKeyUsageTracking(): void {
@@ -161,6 +172,7 @@ class MultiKeyManager {
           ...options.headers
         }
         
+        console.log(`🌐 Making request to ${url} with key ${index + 1}`)
         const response = await fetch(url, { ...options, headers })
         
         // Increment usage on successful request
@@ -176,6 +188,8 @@ class MultiKeyManager {
         }
         
         if (!response.ok) {
+          const errorText = await response.text()
+          console.error(`HTTP ${response.status}: ${errorText}`)
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
         
@@ -231,7 +245,7 @@ class MultiKeyManager {
 
 const keyManager = new MultiKeyManager()
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -261,6 +275,8 @@ serve(async (req) => {
       )
     }
 
+    console.log(`🎵 Generation request from user: ${user.email}`)
+
     // Check user's current usage and limits
     const { data: subscription, error: subError } = await supabaseClient
       .from('user_subscriptions')
@@ -269,6 +285,7 @@ serve(async (req) => {
       .single()
 
     if (subError && subError.code !== 'PGRST116') {
+      console.error('Subscription check error:', subError)
       return new Response(
         JSON.stringify({ success: false, error: 'Failed to check user subscription' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -278,6 +295,7 @@ serve(async (req) => {
     // If no subscription exists, create default free plan
     let userSubscription = subscription
     if (!subscription) {
+      console.log('Creating default subscription for new user')
       const { data: newSub, error: createError } = await supabaseClient
         .from('user_subscriptions')
         .insert({
@@ -290,6 +308,7 @@ serve(async (req) => {
         .single()
 
       if (createError) {
+        console.error('Error creating subscription:', createError)
         return new Response(
           JSON.stringify({ success: false, error: 'Failed to create user subscription' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -300,6 +319,8 @@ serve(async (req) => {
 
     // Check if user has remaining generations
     const remaining = userSubscription.monthly_limit - userSubscription.current_usage
+    console.log(`User has ${remaining} generations remaining (${userSubscription.current_usage}/${userSubscription.monthly_limit})`)
+    
     if (remaining <= 0) {
       return new Response(
         JSON.stringify({ 
@@ -325,25 +346,7 @@ serve(async (req) => {
       )
     }
 
-    // DEDUCT USAGE BEFORE MAKING THE API CALL
-    console.log(`Deducting 1 generation for user ${user.id}. Current usage: ${userSubscription.current_usage}`)
-    
-    const { error: updateError } = await supabaseClient
-      .from('user_subscriptions')
-      .update({
-        current_usage: userSubscription.current_usage + 1
-      })
-      .eq('user_id', user.id)
-
-    if (updateError) {
-      console.error('Failed to update usage:', updateError)
-      return new Response(
-        JSON.stringify({ success: false, error: 'Failed to update usage count' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    console.log(`Usage updated successfully. New usage: ${userSubscription.current_usage + 1}`)
+    console.log(`🎯 Starting generation with prompt: "${prompt.substring(0, 50)}..."`)
 
     try {
       // Make request to Kie AI using the multi-key manager
@@ -362,24 +365,38 @@ serve(async (req) => {
       })
 
       const result: KieAIResponse = await kieResponse.json()
+      console.log('🎵 Kie AI Response:', { code: result.code, msg: result.msg, hasTaskId: !!result.data.taskId })
 
-      if (result.code !== 200) {
-        // If API call failed, revert the usage deduction
-        console.log('API call failed, reverting usage deduction')
-        await supabaseClient
-          .from('user_subscriptions')
-          .update({
-            current_usage: userSubscription.current_usage // Revert to original usage
-          })
-          .eq('user_id', user.id)
-
+      if (result.code !== 200 || !result.data.taskId) {
+        console.error('❌ Generation failed:', result.msg)
+        // DO NOT deduct usage if generation failed
         return new Response(
-          JSON.stringify({ success: false, error: `Generation failed: ${result.msg}` }),
+          JSON.stringify({ 
+            success: false, 
+            error: `Generation failed: ${result.msg}`,
+            shouldRetry: true
+          }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
-      console.log(`Generation started successfully for user ${user.id}. Task ID: ${result.data.taskId}`)
+      // ONLY deduct usage AFTER successful API call
+      console.log(`✅ Generation started successfully, deducting 1 generation for user ${user.id}`)
+      
+      const { error: updateError } = await supabaseClient
+        .from('user_subscriptions')
+        .update({
+          current_usage: userSubscription.current_usage + 1
+        })
+        .eq('user_id', user.id)
+
+      if (updateError) {
+        console.error('❌ Failed to update usage after successful generation:', updateError)
+        // Even if usage update fails, we still return success since the generation started
+        // This prevents double-charging the user
+      } else {
+        console.log(`📊 Usage updated successfully. New usage: ${userSubscription.current_usage + 1}`)
+      }
 
       return new Response(
         JSON.stringify({
@@ -396,20 +413,23 @@ serve(async (req) => {
       )
 
     } catch (apiError) {
-      // If API call failed, revert the usage deduction
-      console.log('API call failed with error, reverting usage deduction:', apiError)
-      await supabaseClient
-        .from('user_subscriptions')
-        .update({
-          current_usage: userSubscription.current_usage // Revert to original usage
-        })
-        .eq('user_id', user.id)
-
-      throw apiError
+      console.error('❌ API call failed:', apiError)
+      // DO NOT deduct usage if API call failed
+      return new Response(
+        JSON.stringify({
+          success: false, 
+          error: `Generation failed: ${apiError.message}`,
+          shouldRetry: true
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
     }
 
   } catch (error) {
-    console.error('Generation error:', error)
+    console.error('❌ Generation error:', error)
     
     return new Response(
       JSON.stringify({
