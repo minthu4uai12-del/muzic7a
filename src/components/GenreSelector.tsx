@@ -23,23 +23,21 @@ export default function GenreSelector({ onGenreSelect, selectedGenre }: GenreSel
   ];
 
   return (
-    <div className="mb-8">
-      <h3 className="text-lg md:text-xl font-semibold text-white mb-3 md:mb-4">Browse by Genre</h3>
-      <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2 md:gap-3">
+    <div className="w-full bg-black/80 backdrop-blur-md rounded-lg p-3 md:p-4 mb-4 md:mb-6">
+      <h3 className="text-lg md:text-xl font-semibold text-white mb-3 md:mb-4 px-1">Browse by Genre</h3>
+      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-12 gap-2 md:gap-3">
         {genres.map((genre) => (
           <button
             key={genre.id}
             onClick={() => onGenreSelect(genre.id)}
-            className={`group relative overflow-hidden rounded-lg md:rounded-xl p-2 md:p-4 transition-all duration-300 hover:scale-105 ${
-              selectedGenre === genre.id
-                ? 'ring-2 ring-white/50 scale-105'
-                : ''
+            className={`group relative overflow-hidden rounded-lg p-2 md:p-3 transition-all duration-200 hover:scale-105 ${
+              selectedGenre === genre.id ? 'ring-2 ring-green-500/80 scale-105' : ''
             }`}
           >
-            <div className={`absolute inset-0 bg-gradient-to-br ${genre.color} opacity-80 group-hover:opacity-100 transition-opacity`} />
-            <div className="relative z-10 flex flex-col items-center space-y-1 md:space-y-2">
-              <genre.icon className="w-4 md:w-6 h-4 md:h-6 text-white" />
-              <span className="text-white text-xs md:text-sm font-medium text-center leading-tight">
+            <div className={`absolute inset-0 bg-gradient-to-br ${genre.color} opacity-70 group-hover:opacity-90 transition-opacity`} />
+            <div className="relative z-10 flex flex-col items-center space-y-1">
+              <genre.icon className="w-4 h-4 md:w-5 md:h-5 text-white" />
+              <span className="text-white text-xs font-medium text-center leading-tight">
                 {genre.name}
               </span>
             </div>
