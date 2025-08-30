@@ -21,7 +21,7 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
   const [options, setOptions] = useState<GenerationOptions>({
     customMode: false,
     instrumental: false,
-    model: 'V4_5PLUS',
+    model: 'V4_5',
     style: '',
     title: '',
   });
