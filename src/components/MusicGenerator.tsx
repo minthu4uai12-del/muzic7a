@@ -19,9 +19,9 @@ const styles = [
 export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicGeneratorProps) {
   const [prompt, setPrompt] = useState('');
   const [options, setOptions] = useState<GenerationOptions>({
-    customMode: true,
+    customMode: false,
     instrumental: false,
-    model: 'V3_5',
+    model: 'V4_5PLUS',
     style: '',
     title: '',
   });
