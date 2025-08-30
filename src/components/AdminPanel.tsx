@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Users, CreditCard, TrendingUp, CheckCircle, XCircle, Clock, Eye, MessageSquare } from 'lucide-react';
+import { Shield, Users, CreditCard, TrendingUp, CheckCircle, XCircle, Clock, Eye, MessageSquare, FileText } from 'lucide-react';
 import { useAdmin } from '../hooks/useAdmin';
 import { PaymentOrder } from '../types/payment';
 
@@ -83,7 +83,6 @@ export default function AdminPanel() {
           </div>
           <p className="text-2xl font-bold text-white">{stats.total}</p>
         </div>
-
         <div className="bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30">
           <div className="flex items-center space-x-2 mb-2">
             <Clock className="w-5 h-5 text-yellow-400" />
@@ -91,7 +90,6 @@ export default function AdminPanel() {
           </div>
           <p className="text-2xl font-bold text-yellow-400">{stats.pending}</p>
         </div>
-
         <div className="bg-blue-500/10 rounded-xl p-4 border border-blue-500/30">
           <div className="flex items-center space-x-2 mb-2">
             <Eye className="w-5 h-5 text-blue-400" />
@@ -99,7 +97,6 @@ export default function AdminPanel() {
           </div>
           <p className="text-2xl font-bold text-blue-400">{stats.paid}</p>
         </div>
-
         <div className="bg-green-500/10 rounded-xl p-4 border border-green-500/30">
           <div className="flex items-center space-x-2 mb-2">
             <CheckCircle className="w-5 h-5 text-green-400" />
@@ -107,7 +104,6 @@ export default function AdminPanel() {
           </div>
           <p className="text-2xl font-bold text-green-400">{stats.approved}</p>
         </div>
-
         <div className="bg-red-500/10 rounded-xl p-4 border border-red-500/30">
           <div className="flex items-center space-x-2 mb-2">
             <XCircle className="w-5 h-5 text-red-400" />
@@ -115,7 +111,6 @@ export default function AdminPanel() {
           </div>
           <p className="text-2xl font-bold text-red-400">{stats.rejected}</p>
         </div>
-
         <div className="bg-green-600/10 rounded-xl p-4 border border-green-600/30">
           <div className="flex items-center space-x-2 mb-2">
             <TrendingUp className="w-5 h-5 text-green-600" />
@@ -148,7 +143,7 @@ export default function AdminPanel() {
         <div className="p-6 border-b border-white/10">
           <h3 className="text-xl font-semibold text-white">Payment Orders</h3>
         </div>
-        
+
         {loading ? (
           <div className="p-8 text-center">
             <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
@@ -167,6 +162,7 @@ export default function AdminPanel() {
                   <th className="text-left p-4 text-gray-400 font-medium">User</th>
                   <th className="text-left p-4 text-gray-400 font-medium">Package</th>
                   <th className="text-left p-4 text-gray-400 font-medium">Amount</th>
+                  <th className="text-left p-4 text-gray-400 font-medium">Transaction ID</th>
                   <th className="text-left p-4 text-gray-400 font-medium">Status</th>
                   <th className="text-left p-4 text-gray-400 font-medium">Date</th>
                   <th className="text-left p-4 text-gray-400 font-medium">Actions</th>
@@ -195,6 +191,11 @@ export default function AdminPanel() {
                     </td>
                     <td className="p-4">
                       <p className="text-green-400 font-medium">{formatMMK(order.amount_mmk)}</p>
+                    </td>
+                    <td className="p-4">
+                      <p className="text-white font-mono text-sm break-all">
+                        {order.transaction_id || 'N/A'}
+                      </p>
                     </td>
                     <td className="p-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>
@@ -234,7 +235,6 @@ export default function AdminPanel() {
                 <XCircle className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-
             <div className="space-y-6">
               {/* Order Info */}
               <div className="grid grid-cols-2 gap-4">
@@ -266,7 +266,15 @@ export default function AdminPanel() {
                 </div>
               </div>
 
-              {/* Payment Proof */}
+              {/* Transaction ID */}
+              {selectedOrder.transaction_id && (
+                <div className="bg-white/10 rounded-lg p-4">
+                  <p className="text-gray-400 text-sm mb-2">Transaction ID</p>
+                  <p className="text-white font-mono break-all">{selectedOrder.transaction_id}</p>
+                </div>
+              )}
+
+              {/* Payment Proof (Optional) */}
               {selectedOrder.payment_proof_url && (
                 <div className="bg-white/10 rounded-lg p-4">
                   <p className="text-gray-400 text-sm mb-2">Payment Proof</p>
