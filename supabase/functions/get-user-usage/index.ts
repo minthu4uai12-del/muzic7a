@@ -6,6 +6,60 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
 
+class MultiKeyManager {
+  private apiKeys: string[] = []
+
+  constructor() {
+    this.loadApiKeysFromEnvironment()
+    console.log(`🔑 Get-Usage: Initialized with ${this.apiKeys.length} API keys`)
+  }
+
+  private loadApiKeysFromEnvironment(): void {
+    const keys: string[] = []
+    
+    console.log('🔍 Get-Usage: Loading API keys from environment...')
+    
+    // Check for multiple key format: MUSIC_AI_API_KEY_1, MUSIC_AI_API_KEY_2, etc.
+    for (let i = 1; i <= 20; i++) {
+      const key = Deno.env.get(`MUSIC_AI_API_KEY_${i}`)
+      if (key && key.trim() && key !== 'your_api_key_here') {
+        keys.push(key.trim())
+        console.log(`✅ Get-Usage: Found API key ${i}`)
+      }
+    }
+    
+    // Fallback to single key
+    if (keys.length === 0) {
+      const singleKey = Deno.env.get('MUSIC_AI_API_KEY')
+      if (singleKey && singleKey.trim() && singleKey !== 'your_api_key_here') {
+        keys.push(singleKey.trim())
+        console.log('✅ Get-Usage: Found fallback API key')
+      }
+    }
+    
+    this.apiKeys = keys
+    console.log(`📊 Get-Usage: Total API keys loaded: ${this.apiKeys.length}`)
+  }
+
+  getKeyStats() {
+    const now = Date.now()
+    return this.apiKeys.map((key, index) => ({
+      index: index + 1,
+      usage: 0, // Reset for demo purposes
+      maxUsage: 100,
+      resetTime: new Date(now + 60 * 60 * 1000), // 1 hour from now
+      isActive: true,
+      lastUsed: null
+    }))
+  }
+
+  getTotalAvailableGenerations(): number {
+    return this.apiKeys.length * 100 // 100 requests per key per hour
+  }
+}
+
+const keyManager = new MultiKeyManager()
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -199,7 +253,9 @@ Deno.serve(async (req) => {
           planType: subscription.plan_type,
           resetDate: subscription.reset_date,
           remaining: subscription.monthly_limit - subscription.current_usage
-        }
+        },
+        apiKeyStats: keyManager.getKeyStats(),
+        totalAvailableGenerations: keyManager.getTotalAvailableGenerations()
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

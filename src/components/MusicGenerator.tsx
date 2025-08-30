@@ -94,16 +94,24 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
     setIsGenerating(true);
     setError('');
     
+    let taskId: string | null = null;
+    
     try {
       console.log('🎵 Starting generation with multiple API key rotation...');
-      const taskId = await generateMusic(prompt, options);
+      taskId = await generateMusic(prompt, options);
+      
+      if (!taskId) {
+        throw new Error('No task ID returned from generation service');
+      }
 
       // Poll for completion
       const pollForCompletion = async () => {
         try {
+          console.log(`⏳ Polling for completion of task: ${taskId}`);
           const result = await checkGenerationStatus(taskId);
           
           if (result.status === 'SUCCESS' && result.tracks.length > 0) {
+            console.log('✅ Generation completed successfully');
             const tracks: Track[] = result.tracks.map((track: any) => ({
               id: track.id,
               title: track.title || options.title || 'Generated Track',
@@ -122,16 +130,25 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
             setIsGenerating(false);
             setSaveMessage('Music generated successfully!');
             setTimeout(() => setSaveMessage(''), 3000);
+            
+            // Refresh usage to show updated count
+            await loadUsage();
           } else if (result.status?.includes('FAILED') || result.error) {
+            console.error('❌ Generation failed:', result.error || result.status);
             throw new Error(result.error || 'Generation failed');
           } else {
+            console.log(`⏳ Generation still processing... Status: ${result.status}`);
             // Still processing, check again in 10 seconds
             setTimeout(pollForCompletion, 10000);
           }
         } catch (error) {
           console.error('Generation failed:', error);
-          setError(`Generation failed: ${error.message}`);
+          const errorMessage = error.message || 'Unknown error occurred';
+          setError(`Generation failed: ${errorMessage}`);
           setIsGenerating(false);
+          
+          // Refresh usage to get accurate count after error
+          await loadUsage();
         }
       };
 
@@ -144,10 +161,19 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
         setError('No generations remaining. Please upgrade your plan or wait for next month.');
       } else if (errorMessage.includes('Music AI API key not configured')) {
         setError('Music generation is not configured. Please contact support.');
+      } else if (errorMessage.includes('Failed to check generation status')) {
+        setError('Unable to check generation status. Please try again or contact support.');
       } else {
         setError(`Generation failed: ${errorMessage}`);
       }
       setIsGenerating(false);
+      
+      // Always refresh usage after any error to ensure accurate display
+      try {
+        await loadUsage();
+      } catch (refreshError) {
+        console.warn('Failed to refresh usage after generation error:', refreshError);
+      }
     }
   };
 

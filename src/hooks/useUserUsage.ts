@@ -252,20 +252,36 @@ export function useUserUsage() {
         throw new Error('No valid session token');
       }
 
+      console.log(`🔍 Checking generation status for task: ${taskId}`);
+
       const response = await fetch(`${supabaseUrl}/functions/v1/check-generation`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.data.session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ taskId })
+        body: JSON.stringify({ taskId }),
+        // Add timeout to prevent hanging requests
+        signal: AbortSignal.timeout(30000) // 30 second timeout
       });
 
       if (!response.ok) {
-        throw new Error('Failed to check generation status');
+        const errorText = await response.text();
+        console.error('Status check failed:', response.status, errorText);
+        throw new Error(`Failed to check generation status: ${response.status} ${errorText}`);
       }
 
       const result = await response.json();
+      console.log('📊 Status check result:', { 
+        success: result.success, 
+        status: result.status, 
+        hasData: !!result.data?.length,
+        error: result.error 
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Status check failed');
+      }
       
       return {
         status: result.status,
@@ -275,6 +291,14 @@ export function useUserUsage() {
       
     } catch (err: any) {
       console.error('Error checking status:', err);
+      
+      // Refresh usage data in case of errors to get accurate count
+      try {
+        await loadUsage();
+      } catch (refreshError) {
+        console.warn('Failed to refresh usage after error:', refreshError);
+      }
+      
       throw err;
     }
   };
