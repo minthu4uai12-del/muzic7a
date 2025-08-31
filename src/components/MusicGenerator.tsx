@@ -130,9 +130,6 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
             setIsGenerating(false);
             setSaveMessage('Music generated successfully!');
             setTimeout(() => setSaveMessage(''), 3000);
-            
-            // Refresh usage to show updated count
-            await loadUsage();
           } else if (result.status?.includes('FAILED') || result.error) {
             console.error('❌ Generation failed:', result.error || result.status);
             throw new Error(result.error || 'Generation failed');
@@ -146,9 +143,6 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
           const errorMessage = error.message || 'Unknown error occurred';
           setError(`Generation failed: ${errorMessage}`);
           setIsGenerating(false);
-          
-          // Refresh usage to get accurate count after error
-          await loadUsage();
         }
       };
 
@@ -167,13 +161,6 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
         setError(`Generation failed: ${errorMessage}`);
       }
       setIsGenerating(false);
-      
-      // Always refresh usage after any error to ensure accurate display
-      try {
-        await loadUsage();
-      } catch (refreshError) {
-        console.warn('Failed to refresh usage after generation error:', refreshError);
-      }
     }
   };
 
@@ -228,11 +215,11 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
           <div className="mt-4">
             <button
               onClick={() => setShowApiStats(true)}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors flex items-center space-x-2 mx-auto"
+              className="px-4 py-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 hover:from-blue-600/30 hover:to-purple-600/30 border border-blue-500/30 text-white rounded-lg text-sm transition-colors flex items-center space-x-2 mx-auto"
             >
               <Zap className="w-4 h-4" />
               <span>
-                API Keys: {usage.apiKeyStats.filter(k => k.isActive).length}/{usage.apiKeyStats.length} Active
+                🔑 {usage.apiKeyStats.filter(k => k.isActive).length}/{usage.apiKeyStats.length} Keys Active
                 {usage.totalAvailableGenerations && ` (${usage.totalAvailableGenerations} available)`}
               </span>
             </button>

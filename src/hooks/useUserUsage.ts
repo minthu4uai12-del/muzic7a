@@ -213,15 +213,14 @@ export function useUserUsage() {
       if (result.apiKeyStats || result.totalAvailableGenerations) {
         const updatedUsage = {
           ...usage,
-          current: (usage?.current || 0) + 1,
-          remaining: Math.max(0, (usage?.remaining || 0) - 1),
           apiKeyStats: result.apiKeyStats || usage?.apiKeyStats || [],
-          totalAvailableGenerations: result.totalAvailableGenerations || usage?.totalAvailableGenerations || 0
+          totalAvailableGenerations: result.totalAvailableGenerations || usage?.totalAvailableGenerations || 0,
+          activeKeys: result.activeKeys || 0
         };
         setUsage(updatedUsage);
       }
       
-      // Refresh usage data to reflect the deduction
+      // Refresh usage data after generation starts
       await loadUsage();
       return result.taskId;
       
