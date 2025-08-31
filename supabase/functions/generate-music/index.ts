@@ -38,190 +38,252 @@ interface KieAIResponse {
 class MultiKeyManager {
   private apiKeys: string[] = []
   private currentKeyIndex: number = 0
-  private keyUsage: Map<string, { count: number; resetTime: number; lastUsed: number }> = new Map()
-  private maxRequestsPerKey: number = 100 // Requests per hour per key
+  private keyUsage: Map<string, { count: number; resetTime: number; lastUsed: number; isBlocked: boolean }> = new Map()
+  private maxRequestsPerKey: number = 50 // Conservative limit per hour per key
   private resetInterval: number = 60 * 60 * 1000 // 1 hour
-  private keyRotationDelay: number = 2000 // 2 seconds between key switches
+  private keyRotationDelay: number = 1000 // 1 second between key switches
+  private blockDuration: number = 5 * 60 * 1000 // 5 minutes block after rate limit
 
   constructor() {
-    this.loadApiKeysFromEnvironment()
+    this.loadApiKeysFromSecrets()
     this.initializeKeyUsageTracking()
-    console.log(`🔑 Initialized MultiKeyManager with ${this.apiKeys.length} API keys`)
+    console.log(`🔑 MultiKeyManager initialized with ${this.apiKeys.length} API keys`)
+    this.logKeyStatus()
   }
 
-  private loadApiKeysFromEnvironment(): void {
+  private loadApiKeysFromSecrets(): void {
     const keys: string[] = []
     
-    console.log('🔍 Checking for API keys in environment...')
+    console.log('🔍 Loading API keys from Supabase Edge Function secrets...')
     
-    // Check for multiple key format: MUSIC_AI_API_KEY_1, MUSIC_AI_API_KEY_2, etc.
+    // Load all possible API keys from secrets
     for (let i = 1; i <= 20; i++) {
-      const key = Deno.env.get(`MUSIC_AI_API_KEY_${i}`)
-      console.log(`Checking MUSIC_AI_API_KEY_${i}:`, key ? 'Found' : 'Not found')
-      if (key && key.trim() && key !== 'your_api_key_here') {
+      const keyName = `MUSIC_AI_API_KEY_${i}`
+      const key = Deno.env.get(keyName)
+      
+      if (key && key.trim() && key !== 'your_api_key_here' && key.length > 10) {
         keys.push(key.trim())
-        console.log(`✅ Added API key ${i}`)
+        console.log(`✅ Loaded API key ${i}: ${key.substring(0, 8)}...${key.substring(key.length - 4)}`)
+      } else {
+        console.log(`❌ API key ${i} not found or invalid`)
       }
     }
     
-    // Fallback to single key
+    // Fallback to single key if no numbered keys found
     if (keys.length === 0) {
       const singleKey = Deno.env.get('MUSIC_AI_API_KEY')
-      console.log('Checking fallback MUSIC_AI_API_KEY:', singleKey ? 'Found' : 'Not found')
-      if (singleKey && singleKey.trim() && singleKey !== 'your_api_key_here') {
+      if (singleKey && singleKey.trim() && singleKey !== 'your_api_key_here' && singleKey.length > 10) {
         keys.push(singleKey.trim())
-        console.log('✅ Added fallback API key')
+        console.log(`✅ Loaded fallback API key: ${singleKey.substring(0, 8)}...${singleKey.substring(singleKey.length - 4)}`)
       }
     }
     
-    // Default fallback key if no environment variables
     if (keys.length === 0) {
-      console.log('⚠️ No API keys found in environment, using fallback')
-      keys.push('4f52e3f37a67bb5aed649a471e9989b9') // Fallback key
+      console.error('❌ No valid API keys found in secrets!')
+      throw new Error('No API keys configured. Please add MUSIC_AI_API_KEY_1, MUSIC_AI_API_KEY_2, etc. to your Supabase Edge Function secrets.')
     }
     
     this.apiKeys = keys
-    console.log(`📊 Total API keys loaded: ${this.apiKeys.length}`)
-    
-    // Log first few characters of each key for debugging (without exposing full keys)
-    this.apiKeys.forEach((key, index) => {
-      console.log(`Key ${index + 1}: ${key.substring(0, 8)}...`)
-    })
+    console.log(`📊 Successfully loaded ${this.apiKeys.length} API keys`)
   }
 
   private initializeKeyUsageTracking(): void {
-    this.apiKeys.forEach((key) => {
+    const now = Date.now()
+    this.apiKeys.forEach((key, index) => {
       this.keyUsage.set(key, { 
         count: 0, 
-        resetTime: Date.now() + this.resetInterval,
-        lastUsed: 0
+        resetTime: now + this.resetInterval,
+        lastUsed: 0,
+        isBlocked: false
       })
+      console.log(`🔧 Initialized tracking for key ${index + 1}`)
     })
   }
 
-  private getNextAvailableKey(): { key: string; index: number } {
-    const now = Date.now()
-    
-    // Reset usage counters for keys whose reset time has passed
-    this.keyUsage.forEach((usage, key) => {
-      if (now >= usage.resetTime) {
-        this.keyUsage.set(key, { 
-          count: 0, 
-          resetTime: now + this.resetInterval,
-          lastUsed: usage.lastUsed
-        })
-      }
-    })
-    
-    // Strategy 1: Find a key that hasn't hit the rate limit and hasn't been used recently
-    for (let i = 0; i < this.apiKeys.length; i++) {
-      const keyIndex = (this.currentKeyIndex + i) % this.apiKeys.length
-      const key = this.apiKeys[keyIndex]
-      const usage = this.keyUsage.get(key)!
-      
-      // Check if key is available (under rate limit and not used recently)
-      const isUnderRateLimit = usage.count < this.maxRequestsPerKey
-      const hasDelayPassed = (now - usage.lastUsed) >= this.keyRotationDelay
-      
-      if (isUnderRateLimit && hasDelayPassed) {
-        this.currentKeyIndex = keyIndex
-        console.log(`🔄 Using API key ${keyIndex + 1}/${this.apiKeys.length} (Usage: ${usage.count}/${this.maxRequestsPerKey})`)
-        return { key, index: keyIndex }
-      }
-    }
-    
-    // Strategy 2: If all keys are recently used, find the one with lowest usage
-    let bestKey = this.apiKeys[0]
-    let bestIndex = 0
-    let lowestUsage = this.keyUsage.get(bestKey)!.count
-    
+  private logKeyStatus(): void {
+    console.log('📊 Current API Key Status:')
     this.apiKeys.forEach((key, index) => {
       const usage = this.keyUsage.get(key)!
-      if (usage.count < lowestUsage) {
-        bestKey = key
-        bestIndex = index
-        lowestUsage = usage.count
+      console.log(`Key ${index + 1}: Usage ${usage.count}/${this.maxRequestsPerKey}, Active: ${!usage.isBlocked}`)
+    })
+  }
+
+  private resetExpiredKeys(): void {
+    const now = Date.now()
+    let resetCount = 0
+    
+    this.keyUsage.forEach((usage, key) => {
+      // Reset usage counter if reset time has passed
+      if (now >= usage.resetTime) {
+        usage.count = 0
+        usage.resetTime = now + this.resetInterval
+        usage.isBlocked = false
+        resetCount++
+      }
+      
+      // Unblock keys after block duration
+      if (usage.isBlocked && (now - usage.lastUsed) >= this.blockDuration) {
+        usage.isBlocked = false
+        console.log(`🔓 Unblocked API key after cooldown period`)
       }
     })
     
-    this.currentKeyIndex = bestIndex
-    console.log(`⚠️ All keys recently used, selecting key ${bestIndex + 1} with lowest usage: ${lowestUsage}`)
-    return { key: bestKey, index: bestIndex }
-  }
-
-  private incrementKeyUsage(apiKey: string): void {
-    const usage = this.keyUsage.get(apiKey)
-    if (usage) {
-      usage.count++
-      usage.lastUsed = Date.now()
-      console.log(`📊 API key usage updated: ${usage.count}/${this.maxRequestsPerKey}`)
+    if (resetCount > 0) {
+      console.log(`🔄 Reset ${resetCount} API keys for new hour`)
     }
   }
 
-  async makeRequest(url: string, options: RequestInit, maxRetries: number = 3): Promise<Response> {
-    let lastError: Error | null = null
+  private getNextAvailableKey(): { key: string; index: number } | null {
+    this.resetExpiredKeys()
     
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const now = Date.now()
+    const availableKeys: Array<{ key: string; index: number; usage: any }> = []
+    
+    // Find all available keys
+    this.apiKeys.forEach((key, index) => {
+      const usage = this.keyUsage.get(key)!
+      const isAvailable = !usage.isBlocked && 
+                         usage.count < this.maxRequestsPerKey && 
+                         (now - usage.lastUsed) >= this.keyRotationDelay
+      
+      if (isAvailable) {
+        availableKeys.push({ key, index, usage })
+      }
+    })
+    
+    if (availableKeys.length === 0) {
+      console.warn('⚠️ No available API keys found!')
+      this.logKeyStatus()
+      return null
+    }
+    
+    // Sort by usage count (ascending) and last used time (ascending)
+    availableKeys.sort((a, b) => {
+      if (a.usage.count !== b.usage.count) {
+        return a.usage.count - b.usage.count
+      }
+      return a.usage.lastUsed - b.usage.lastUsed
+    })
+    
+    const selected = availableKeys[0]
+    this.currentKeyIndex = selected.index
+    
+    console.log(`🎯 Selected API key ${selected.index + 1}/${this.apiKeys.length} (Usage: ${selected.usage.count}/${this.maxRequestsPerKey})`)
+    return { key: selected.key, index: selected.index }
+  }
+
+  private incrementKeyUsage(apiKey: string, success: boolean = true): void {
+    const usage = this.keyUsage.get(apiKey)
+    if (usage) {
+      if (success) {
+        usage.count++
+      }
+      usage.lastUsed = Date.now()
+      console.log(`📊 Updated key usage: ${usage.count}/${this.maxRequestsPerKey}`)
+    }
+  }
+
+  private blockKey(apiKey: string, reason: string): void {
+    const usage = this.keyUsage.get(apiKey)
+    if (usage) {
+      usage.isBlocked = true
+      usage.lastUsed = Date.now()
+      console.log(`🚫 Blocked API key: ${reason}`)
+    }
+  }
+
+  async makeRequest(url: string, options: RequestInit, maxRetries: number = this.apiKeys.length): Promise<Response> {
+    let lastError: Error | null = null
+    let attemptCount = 0
+    
+    while (attemptCount < maxRetries) {
+      const keyInfo = this.getNextAvailableKey()
+      
+      if (!keyInfo) {
+        console.error('❌ No available API keys for request')
+        throw new Error('All API keys are currently rate limited or blocked. Please try again later.')
+      }
+      
       try {
-        const { key, index } = this.getNextAvailableKey()
-        
         const headers = {
-          'Authorization': `Bearer ${key}`,
+          'Authorization': `Bearer ${keyInfo.key}`,
           'Content-Type': 'application/json',
-          'User-Agent': 'MuzAI-Server/1.0',
+          'User-Agent': 'MuzAI-EdgeFunction/1.0',
           ...options.headers
         }
         
-        console.log(`🌐 Making request to ${url} with key ${index + 1}`)
-        const response = await fetch(url, { ...options, headers })
+        console.log(`🌐 Making request to ${url} with key ${keyInfo.index + 1}`)
         
-        // Increment usage on successful request
-        this.incrementKeyUsage(key)
+        const response = await fetch(url, { 
+          ...options, 
+          headers,
+          signal: AbortSignal.timeout(30000) // 30 second timeout
+        })
         
-        // Check for rate limiting
+        // Handle different response statuses
         if (response.status === 429) {
-          console.warn(`⚠️ Rate limited on key ${index + 1}, trying next key...`)
-          // Mark this key as temporarily exhausted
-          const usage = this.keyUsage.get(key)!
-          usage.count = this.maxRequestsPerKey
+          console.warn(`⚠️ Rate limited on key ${keyInfo.index + 1}`)
+          this.blockKey(keyInfo.key, 'Rate limited (429)')
+          attemptCount++
+          continue
+        }
+        
+        if (response.status === 401 || response.status === 403) {
+          console.warn(`🔒 Authentication failed on key ${keyInfo.index + 1}`)
+          this.blockKey(keyInfo.key, `Auth failed (${response.status})`)
+          attemptCount++
           continue
         }
         
         if (!response.ok) {
           const errorText = await response.text()
-          console.error(`HTTP ${response.status}: ${errorText}`)
+          console.error(`❌ HTTP ${response.status} on key ${keyInfo.index + 1}: ${errorText}`)
+          this.incrementKeyUsage(keyInfo.key, false)
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
         
+        // Success - increment usage
+        this.incrementKeyUsage(keyInfo.key, true)
+        console.log(`✅ Request successful with key ${keyInfo.index + 1}`)
         return response
         
       } catch (error) {
         lastError = error as Error
-        console.error(`❌ Request failed on attempt ${attempt + 1}:`, error)
+        console.error(`❌ Request failed on key ${keyInfo.index + 1}:`, error.message)
         
-        // If this is the last attempt, throw the error
-        if (attempt === maxRetries - 1) {
-          break
+        // Block key if it's a persistent error
+        if (error.name === 'TimeoutError' || error.message.includes('fetch')) {
+          this.blockKey(keyInfo.key, `Network error: ${error.message}`)
         }
         
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
+        attemptCount++
+        
+        // Wait before trying next key
+        if (attemptCount < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
       }
     }
     
-    throw lastError || new Error('All retry attempts failed')
+    console.error(`❌ All ${attemptCount} attempts failed`)
+    this.logKeyStatus()
+    throw lastError || new Error(`All ${maxRetries} API key attempts failed`)
   }
 
   getKeyStats() {
+    const now = Date.now()
     return this.apiKeys.map((key, index) => {
       const usage = this.keyUsage.get(key)!
+      const isActive = !usage.isBlocked && usage.count < this.maxRequestsPerKey
+      
       return {
         index: index + 1,
         usage: usage.count,
         maxUsage: this.maxRequestsPerKey,
         resetTime: new Date(usage.resetTime),
-        isActive: usage.count < this.maxRequestsPerKey,
-        lastUsed: usage.lastUsed > 0 ? new Date(usage.lastUsed) : null
+        isActive,
+        lastUsed: usage.lastUsed > 0 ? new Date(usage.lastUsed) : null,
+        isBlocked: usage.isBlocked
       }
     })
   }
@@ -231,7 +293,8 @@ class MultiKeyManager {
     let total = 0
     
     this.keyUsage.forEach((usage) => {
-      // Reset if time has passed
+      if (usage.isBlocked) return
+      
       if (now >= usage.resetTime) {
         total += this.maxRequestsPerKey
       } else {
@@ -241,8 +304,16 @@ class MultiKeyManager {
     
     return total
   }
+
+  getActiveKeyCount(): number {
+    return this.apiKeys.filter((key) => {
+      const usage = this.keyUsage.get(key)!
+      return !usage.isBlocked && usage.count < this.maxRequestsPerKey
+    }).length
+  }
 }
 
+// Create global instance
 const keyManager = new MultiKeyManager()
 
 Deno.serve(async (req) => {
@@ -251,6 +322,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log('🎵 Generate Music Function Called')
+    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -259,6 +332,7 @@ Deno.serve(async (req) => {
     // Get user from auth header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
+      console.error('❌ No authorization header')
       return new Response(
         JSON.stringify({ success: false, error: 'No authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -269,13 +343,14 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
     
     if (authError || !user) {
+      console.error('❌ Authentication failed:', authError?.message)
       return new Response(
         JSON.stringify({ success: false, error: 'Invalid authentication' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log(`🎵 Generation request from user: ${user.email}`)
+    console.log(`👤 User authenticated: ${user.email}`)
 
     // Check user's current usage and limits
     const { data: subscription, error: subError } = await supabaseClient
@@ -285,17 +360,17 @@ Deno.serve(async (req) => {
       .single()
 
     if (subError && subError.code !== 'PGRST116') {
-      console.error('Subscription check error:', subError)
+      console.error('❌ Subscription check error:', subError)
       return new Response(
         JSON.stringify({ success: false, error: 'Failed to check user subscription' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // If no subscription exists, create default free plan
+    // Create default subscription if none exists
     let userSubscription = subscription
     if (!subscription) {
-      console.log('Creating default subscription for new user')
+      console.log('📝 Creating default subscription for new user')
       const { data: newSub, error: createError } = await supabaseClient
         .from('user_subscriptions')
         .insert({
@@ -308,7 +383,7 @@ Deno.serve(async (req) => {
         .single()
 
       if (createError) {
-        console.error('Error creating subscription:', createError)
+        console.error('❌ Error creating subscription:', createError)
         return new Response(
           JSON.stringify({ success: false, error: 'Failed to create user subscription' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -319,9 +394,10 @@ Deno.serve(async (req) => {
 
     // Check if user has remaining generations
     const remaining = userSubscription.monthly_limit - userSubscription.current_usage
-    console.log(`User has ${remaining} generations remaining (${userSubscription.current_usage}/${userSubscription.monthly_limit})`)
+    console.log(`📊 User usage: ${userSubscription.current_usage}/${userSubscription.monthly_limit} (${remaining} remaining)`)
     
     if (remaining <= 0) {
+      console.log('❌ User has no remaining generations')
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -340,6 +416,7 @@ Deno.serve(async (req) => {
     const { prompt, options = {} }: GenerateRequest = await req.json()
 
     if (!prompt?.trim()) {
+      console.error('❌ No prompt provided')
       return new Response(
         JSON.stringify({ success: false, error: 'Prompt is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -347,6 +424,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`🎯 Starting generation with prompt: "${prompt.substring(0, 50)}..."`)
+    console.log(`🔑 Available API keys: ${keyManager.getActiveKeyCount()}/${keyManager.apiKeys.length}`)
 
     try {
       // Make request to Kie AI using the multi-key manager
@@ -365,16 +443,23 @@ Deno.serve(async (req) => {
       })
 
       const result: KieAIResponse = await kieResponse.json()
-      console.log('🎵 Kie AI Response:', { code: result.code, msg: result.msg, hasTaskId: !!result.data.taskId })
+      console.log('🎵 Kie AI Response:', { 
+        code: result.code, 
+        msg: result.msg, 
+        hasTaskId: !!result.data.taskId,
+        taskId: result.data.taskId 
+      })
 
       if (result.code !== 200 || !result.data.taskId) {
-        console.error('❌ Generation failed:', result.msg)
-        // DO NOT deduct usage if generation failed
+        console.error('❌ Generation request failed:', result.msg)
+        // DO NOT deduct usage if generation request failed
         return new Response(
           JSON.stringify({ 
             success: false, 
             error: `Generation failed: ${result.msg}`,
-            shouldRetry: true
+            shouldRetry: true,
+            apiKeyStats: keyManager.getKeyStats(),
+            totalAvailableGenerations: keyManager.getTotalAvailableGenerations()
           }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
@@ -391,11 +476,10 @@ Deno.serve(async (req) => {
         .eq('user_id', user.id)
 
       if (updateError) {
-        console.error('❌ Failed to update usage after successful generation:', updateError)
-        // Even if usage update fails, we still return success since the generation started
-        // This prevents double-charging the user
+        console.error('❌ Failed to update usage:', updateError)
+        // Still return success since generation started
       } else {
-        console.log(`📊 Usage updated successfully. New usage: ${userSubscription.current_usage + 1}`)
+        console.log(`📊 Usage updated: ${userSubscription.current_usage + 1}/${userSubscription.monthly_limit}`)
       }
 
       return new Response(
@@ -405,7 +489,8 @@ Deno.serve(async (req) => {
           message: 'Generation started successfully',
           remainingGenerations: remaining - 1,
           apiKeyStats: keyManager.getKeyStats(),
-          totalAvailableGenerations: keyManager.getTotalAvailableGenerations()
+          totalAvailableGenerations: keyManager.getTotalAvailableGenerations(),
+          activeKeys: keyManager.getActiveKeyCount()
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -413,13 +498,15 @@ Deno.serve(async (req) => {
       )
 
     } catch (apiError) {
-      console.error('❌ API call failed:', apiError)
+      console.error('❌ API call failed:', apiError.message)
       // DO NOT deduct usage if API call failed
       return new Response(
         JSON.stringify({
           success: false, 
           error: `Generation failed: ${apiError.message}`,
-          shouldRetry: true
+          shouldRetry: true,
+          apiKeyStats: keyManager.getKeyStats(),
+          totalAvailableGenerations: keyManager.getTotalAvailableGenerations()
         }),
         {
           status: 500,

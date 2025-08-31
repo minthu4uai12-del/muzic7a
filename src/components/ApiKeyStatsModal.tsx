@@ -175,15 +175,22 @@ export default function ApiKeyStatsModal({
         {/* Footer Info */}
         <div className="mt-6 p-4 bg-blue-500/10 rounded-xl border border-blue-500/30">
           <div className="flex items-start space-x-3">
-            <Zap className="w-5 h-5 text-blue-400 mt-0.5" />
+              <span>Resets: {keyStats.resetTime.toLocaleString()}</span>
             <div>
               <h4 className="text-sm font-semibold text-blue-400 mb-1">Auto Key Rotation</h4>
               <p className="text-xs text-gray-300 leading-relaxed">
-                The system automatically rotates between available API keys to distribute load and avoid rate limits. 
-                Keys reset their usage counters every hour. When a key hits its limit, the system switches to the next available key.
-              </p>
+                The system automatically rotates between {apiKeyStats.length} API keys to distribute load and avoid rate limits. 
+                Keys reset every hour and are temporarily blocked after rate limits. Currently {activeKeys}/{apiKeyStats.length} keys are active 
+                with {totalAvailableGenerations} total generations available across all keys.
+              Last used: {keyStats.lastUsed.toLocaleString()}
             </div>
           </div>
+          
+          {keyStats.isBlocked && (
+            <span className="text-red-400 text-xs">
+              🚫 Temporarily blocked
+            </span>
+          )}
         </div>
       </div>
     </div>
