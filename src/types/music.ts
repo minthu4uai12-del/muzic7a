@@ -96,22 +96,3 @@ export interface UserProfile {
   created_at: string;
   updated_at: string;
 }
-
-export interface UserUsage {
-  current: number;
-  limit: number;
-  planType: 'free' | 'premium';
-  resetDate: string;
-  remaining: number;
-  apiKeyStats?: Array<{
-    index: number;
-    usage: number;
-    maxUsage: number;
-    resetTime: Date;
-    isActive: boolean;
-    lastUsed: Date | null;
-    isBlocked?: boolean;
-  }>;
-  totalAvailableGenerations?: number;
-  activeKeys?: number;
-}

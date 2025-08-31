@@ -17,14 +17,12 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
   const [paymentNotes, setPaymentNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const { createOrder, updateOrderPaymentProof, formatMMK } = usePayments();
 
   const handleCreateOrder = async () => {
     if (!selectedPackage) return;
     setLoading(true);
-    setError(null);
     try {
       const order = await createOrder(selectedPackage.id);
       if (order) {
@@ -33,7 +31,6 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
       }
     } catch (err) {
       console.error('Failed to create order:', err);
-      setError('Failed to create order. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -42,21 +39,13 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
   const handleSubmitPaymentProof = async () => {
     if (!currentOrder || !transactionId.trim()) return;
     setLoading(true);
-    setError(null);
     try {
-      const success = await updateOrderPaymentProof(
-        currentOrder.id,
-        transactionId,
-        paymentNotes
-      );
+      const success = await updateOrderPaymentProof(currentOrder.id, transactionId, paymentNotes);
       if (success) {
         setStep('success');
-      } else {
-        setError('Failed to submit payment proof. Please try again.');
       }
     } catch (err) {
       console.error('Failed to submit payment proof:', err);
-      setError('Failed to submit payment proof. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -69,7 +58,6 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (err) {
       console.error('Failed to copy text:', err);
-      setError('Failed to copy to clipboard.');
     }
   };
 
@@ -78,7 +66,6 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
     setCurrentOrder(null);
     setTransactionId('');
     setPaymentNotes('');
-    setError(null);
     onClose();
   };
 
@@ -98,17 +85,10 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
           <button
             onClick={handleClose}
             className="p-2 hover:bg-white/10 rounded-full transition-colors"
-            aria-label="Close"
           >
             <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-500/20 rounded-lg border border-red-500/50 text-red-300 text-sm">
-            {error}
-          </div>
-        )}
 
         {/* Step 1: Package Selection */}
         {step === 'select' && (
@@ -136,12 +116,7 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
                     name="paymentMethod"
                     value="bank_transfer"
                     checked={paymentMethod === 'bank_transfer'}
-                    onChange={(e) => {
-                      const value = e.target.value as 'bank_transfer' | 'mobile_money';
-                      if (value === 'bank_transfer' || value === 'mobile_money') {
-                        setPaymentMethod(value);
-                      }
-                    }}
+                    onChange={(e) => setPaymentMethod(e.target.value as 'bank_transfer' | 'mobile_money')}
                     className="w-4 h-4 text-purple-600"
                   />
                   <Banknote className="w-5 h-5 text-blue-400" />
@@ -156,18 +131,13 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
                     name="paymentMethod"
                     value="mobile_money"
                     checked={paymentMethod === 'mobile_money'}
-                    onChange={(e) => {
-                      const value = e.target.value as 'bank_transfer' | 'mobile_money';
-                      if (value === 'bank_transfer' || value === 'mobile_money') {
-                        setPaymentMethod(value);
-                      }
-                    }}
+                    onChange={(e) => setPaymentMethod(e.target.value as 'bank_transfer' | 'mobile_money')}
                     className="w-4 h-4 text-purple-600"
                   />
                   <Smartphone className="w-5 h-5 text-green-400" />
                   <div>
                     <p className="text-white font-medium">Mobile Money</p>
-                    <p className="text-gray-400 text-sm">KBZPay</p>
+                    <p className="text-gray-400 text-sm">KBZPay, WavePay, AYAPay</p>
                   </div>
                 </label>
               </div>
@@ -185,6 +155,7 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
         {/* Step 2: Payment Instructions */}
         {step === 'payment' && currentOrder && (
           <div className="space-y-6">
+            {/* Myanmar Instructions Header */}
             <div className="bg-gradient-to-r from-blue-600/20 to-green-600/20 rounded-xl p-4 border border-blue-500/30">
               <h4 className="text-lg font-semibold text-white mb-2 flex items-center">
                 🇲🇲 Myanmar Payment Instructions | မြန်မာငွေပေးချေမှုလမ်းညွှန်
@@ -193,57 +164,144 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
                 <div>
                   <p className="text-blue-300 font-medium mb-1">English:</p>
                   <p className="text-gray-300">
-                    Transfer details
+                    Follow the payment details below and enter your transaction ID for verification.
                   </p>
                 </div>
                 <div>
                   <p className="text-green-300 font-medium mb-1">မြန်မာ:</p>
                   <p className="text-gray-300">
-                    လွှဲအသေးစိတ်
+                    အောက်ပါငွေပေးချေမှုအသေးစိတ်များကိုလိုက်နာပြီး သင့်ငွေလွှဲနံပါတ်ကို အတည်ပြုရန်ထည့်သွင်းပါ။
                   </p>
                 </div>
               </div>
             </div>
-
-            <div className="mb-4 p-3 bg-green-500/10 rounded-lg">
-              <p className="text-green-300 text-sm font-medium mb-2">
-                📱 How to transfer | လွှဲပုံလွှဲနည်း:
-              </p>
-              <div className="text-xs text-gray-300 space-y-1">
-                <p>• Open your mobile money app</p>
-                <p>• သင့်ကပေးငွေအက်ပ်ကို ဖွင့်ပါ</p>
-                <p>• Transfer to the number below</p>
-                <p>• အောက်ပါဖုန်းနံပါတ်သို့လွှဲပါ (Account Name - Yan Naing Soe)</p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-300">Phone Number | ဖုန်းနံပါတ်:</span>
+            <div className="bg-white/10 rounded-xl p-4 border border-white/20">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-400">Order Reference:</span>
                 <div className="flex items-center space-x-2">
-                  <span className="text-white font-mono">09974902335</span>
+                  <span className="text-white font-mono">{currentOrder.order_reference}</span>
                   <button
-                    onClick={() => copyToClipboard('09974902335')}
+                    onClick={() => copyToClipboard(currentOrder.order_reference)}
                     className="p-1 hover:bg-white/10 rounded"
-                    aria-label="Copy phone number"
                   >
                     {copySuccess ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
                   </button>
                 </div>
               </div>
-            </div>
-
-            <div className="mt-4 p-3 bg-green-500/10 rounded-lg border border-green-500/30">
-              <p className="text-green-300 text-sm font-medium mb-1">
-                ✅ After transfer | လွှဲပြီးနောက်:
-              </p>
-              <div className="text-xs text-gray-300 space-y-1">
-                <p>• Note the transaction ID from your app</p>
-                <p>• သင့်ကပေးအက်ပ်မှ Transaction ID ငွေလွှဲနံပါတ်ကို မှတ်ပါ</p>
-                <p>• Enter the transaction ID in the next step</p>
-                <p>• နောက်အဆင့်တွင် ငွေလွှဲနံပါတ်ကို ထည့်သွင်းပါ</p>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Amount:</span>
+                <span className="text-green-400 font-bold">{formatMMK(currentOrder.amount_mmk)}</span>
+              </div>
+              <div className="mt-3 p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+                <p className="text-yellow-300 text-sm">
+                  <strong>📝 Important | အရေးကြီး:</strong>
+                </p>
+                <p className="text-gray-300 text-xs mt-1">
+                  • Include order reference in payment description<br />
+                  • ငွေပေးချေမှုဖော်ပြချက်တွင် အော်ဒါနံပါတ်ထည့်ပါ
+                </p>
               </div>
             </div>
+
+            {/* Bank Transfer Section */}
+            {paymentMethod === 'bank_transfer' && (
+              <div className="bg-blue-500/10 rounded-xl p-6 border border-blue-500/30">
+                <h4 className="text-lg font-semibold text-white mb-4 flex items-center">
+                  <Banknote className="w-5 h-5 mr-2" />
+                  Bank Transfer Details | ဘဏ်လွှဲငွေအသေးစိတ်
+                </h4>
+                <div className="mb-4 p-3 bg-blue-500/10 rounded-lg">
+                  <p className="text-blue-300 text-sm font-medium mb-2">
+                    🏦 How to transfer | လွှဲပုံလွှဲနည်း:
+                  </p>
+                  <div className="text-xs text-gray-300 space-y-1">
+                    <p>• Go to your bank or use mobile banking app</p>
+                    <p>• သင့်ဘဏ်သို့သွားပါ သို့မဟုတ် မိုဘိုင်းဘဏ်အက်ပ်ကိုအသုံးပြုပါ</p>
+                    <p>• Transfer to the account details below</p>
+                    <p>• အောက်ပါအကောင့်အသေးစိတ်များသို့လွှဲပါ</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Bank Name | ဘဏ်အမည်:</span>
+                    <span className="text-white">KBZ Bank</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Account Name | အကောင့်အမည်:</span>
+                    <span className="text-white">Yan Naing Soe</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300">Account Number | အကောင့်နံပါတ်:</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-white font-mono">09974902335</span>
+                      <button
+                        onClick={() => copyToClipboard('09974902335')}
+                        className="p-1 hover:bg-white/10 rounded"
+                      >
+                        {copySuccess ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 p-3 bg-green-500/10 rounded-lg border border-green-500/30">
+                  <p className="text-green-300 text-sm font-medium mb-1">
+                    ✅ After transfer | လွှဲပြီးနောက်:
+                  </p>
+                  <div className="text-xs text-gray-300 space-y-1">
+                    <p>• Note the transaction ID from your bank</p>
+                    <p>• သင့်ဘဏ်မှ Transaction ID ငွေလွှဲနံပါတ်ကို မှတ်ပါ</p>
+                    <p>• Enter the transaction ID in the next step</p>
+                    <p>• နောက်အဆင့်တွင် ငွေလွှဲနံပါတ်ကို ထည့်သွင်းပါ</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mobile Money Section */}
+            {paymentMethod === 'mobile_money' && (
+              <div className="bg-green-500/10 rounded-xl p-6 border border-green-500/30">
+                <h4 className="text-lg font-semibold text-white mb-4 flex items-center">
+                  <Smartphone className="w-5 h-5 mr-2" />
+                  Mobile Money Details | မိုဘိုင်းငွေအသေးစိတ်
+                </h4>
+                <div className="mb-4 p-3 bg-green-500/10 rounded-lg">
+                  <p className="text-green-300 text-sm font-medium mb-2">
+                    📱 How to transfer | လွှဲပုံလွှဲနည်း:
+                  </p>
+                  <div className="text-xs text-gray-300 space-y-1">
+                    <p>• Open your mobile money app</p>
+                    <p>• သင့်မိုဘိုင်းငွေအက်ပ်ကို ဖွင့်ပါ</p>
+                    <p>• Transfer to the number below</p>
+                    <p>• အောက်ပါဖုန်းနံပါတ်သို့လွှဲပါ</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Phone Number | ဖုန်းနံပါတ်:</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-white font-mono">09740807009</span>
+                      <button
+                        onClick={() => copyToClipboard('09740807009')}
+                        className="p-1 hover:bg-white/10 rounded"
+                      >
+                        {copySuccess ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 p-3 bg-green-500/10 rounded-lg border border-green-500/30">
+                  <p className="text-green-300 text-sm font-medium mb-1">
+                    ✅ After transfer | လွှဲပြီးနောက်:
+                  </p>
+                  <div className="text-xs text-gray-300 space-y-1">
+                    <p>• Note the transaction ID from your app</p>
+                    <p>• သင့်အက်ပ်မှ Transaction ID ငွေလွှဲနံပါတ်ကို မှတ်ပါ</p>
+                    <p>• Enter the transaction ID in the next step</p>
+                    <p>• နောက်အဆင့်တွင် ငွေလွှဲနံပါတ်ကို ထည့်သွင်းပါ</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="bg-yellow-500/10 rounded-xl p-4 border border-yellow-500/30">
               <p className="text-yellow-300 text-sm mb-2">
@@ -333,7 +391,7 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
         )}
 
         {/* Step 4: Success */}
-        {step === 'success' && currentOrder && (
+        {step === 'success' && (
           <div className="text-center space-y-6">
             <div className="bg-green-500/20 rounded-full w-20 h-20 flex items-center justify-center mx-auto">
               <CheckCircle className="w-10 h-10 text-green-400" />
@@ -359,7 +417,7 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
             </div>
             <div className="bg-white/10 rounded-xl p-4 border border-white/20">
               <p className="text-gray-300 text-sm mb-2">
-                <strong>Order Reference | အော်ဒါနံပါတ်:</strong> {currentOrder.order_reference}
+                <strong>Order Reference | အော်ဒါနံပါတ်:</strong> {currentOrder?.order_reference}
               </p>
               <p className="text-gray-300 text-sm mb-2">
                 <strong>Transaction ID | လက်ခံမှတ်နံပါတ်:</strong> {transactionId}

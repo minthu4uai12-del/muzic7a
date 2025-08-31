@@ -8,113 +8,53 @@ const corsHeaders = {
 
 class MultiKeyManager {
   private apiKeys: string[] = []
-  private keyUsage: Map<string, { count: number; resetTime: number; lastUsed: number; isBlocked: boolean }> = new Map()
-  private maxRequestsPerKey: number = 50
-  private resetInterval: number = 60 * 60 * 1000
 
   constructor() {
-    this.loadApiKeysFromSecrets()
-    this.initializeKeyUsageTracking()
+    this.loadApiKeysFromEnvironment()
     console.log(`🔑 Get-Usage: Initialized with ${this.apiKeys.length} API keys`)
   }
 
-  private loadApiKeysFromSecrets(): void {
+  private loadApiKeysFromEnvironment(): void {
     const keys: string[] = []
     
-    console.log('🔍 Get-Usage: Loading API keys from Supabase secrets...')
+    console.log('🔍 Get-Usage: Loading API keys from environment...')
     
-    // Load all possible API keys from secrets
+    // Check for multiple key format: MUSIC_AI_API_KEY_1, MUSIC_AI_API_KEY_2, etc.
     for (let i = 1; i <= 20; i++) {
-      const keyName = `MUSIC_AI_API_KEY_${i}`
-      const key = Deno.env.get(keyName)
-      
-      if (key && key.trim() && key !== 'your_api_key_here' && key.length > 10) {
+      const key = Deno.env.get(`MUSIC_AI_API_KEY_${i}`)
+      if (key && key.trim() && key !== 'your_api_key_here') {
         keys.push(key.trim())
-        console.log(`✅ Get-Usage: Found API key ${i}: ${key.substring(0, 8)}...${key.substring(key.length - 4)}`)
-      } else {
-        console.log(`❌ Get-Usage: API key ${i} not found or invalid`)
+        console.log(`✅ Get-Usage: Found API key ${i}`)
       }
     }
     
     // Fallback to single key
     if (keys.length === 0) {
       const singleKey = Deno.env.get('MUSIC_AI_API_KEY')
-      if (singleKey && singleKey.trim() && singleKey !== 'your_api_key_here' && singleKey.length > 10) {
+      if (singleKey && singleKey.trim() && singleKey !== 'your_api_key_here') {
         keys.push(singleKey.trim())
         console.log('✅ Get-Usage: Found fallback API key')
       }
-    }
-    
-    if (keys.length === 0) {
-      console.error('❌ Get-Usage: No valid API keys found in secrets!')
-      // Don't throw error here, just log warning
-      console.warn('⚠️ API key statistics will not be available')
     }
     
     this.apiKeys = keys
     console.log(`📊 Get-Usage: Total API keys loaded: ${this.apiKeys.length}`)
   }
 
-  private initializeKeyUsageTracking(): void {
-    const now = Date.now()
-    this.apiKeys.forEach((key, index) => {
-      this.keyUsage.set(key, { 
-        count: Math.floor(Math.random() * 10), // Simulate some usage for demo
-        resetTime: now + this.resetInterval,
-        lastUsed: now - Math.floor(Math.random() * 60000), // Random last used time
-        isBlocked: false
-      })
-      console.log(`🔧 Get-Usage: Initialized tracking for key ${index + 1}`)
-    })
-  }
-
   getKeyStats() {
     const now = Date.now()
-    return this.apiKeys.map((key, index) => {
-      const usage = this.keyUsage.get(key)!
-      const isActive = !usage.isBlocked && usage.count < this.maxRequestsPerKey
-      
-      // Reset if time has passed
-      if (now >= usage.resetTime) {
-        usage.count = 0
-        usage.resetTime = now + this.resetInterval
-        usage.isBlocked = false
-      }
-      
-      return {
-        index: index + 1,
-        usage: usage.count,
-        maxUsage: this.maxRequestsPerKey,
-        resetTime: new Date(usage.resetTime),
-        isActive,
-        lastUsed: usage.lastUsed > 0 ? new Date(usage.lastUsed) : null,
-        isBlocked: usage.isBlocked
-      }
-    })
+    return this.apiKeys.map((key, index) => ({
+      index: index + 1,
+      usage: 0, // Reset for demo purposes
+      maxUsage: 100,
+      resetTime: new Date(now + 60 * 60 * 1000), // 1 hour from now
+      isActive: true,
+      lastUsed: null
+    }))
   }
 
   getTotalAvailableGenerations(): number {
-    const now = Date.now()
-    let total = 0
-    
-    this.keyUsage.forEach((usage) => {
-      if (usage.isBlocked) return
-      
-      if (now >= usage.resetTime) {
-        total += this.maxRequestsPerKey
-      } else {
-        total += Math.max(0, this.maxRequestsPerKey - usage.count)
-      }
-    })
-    
-    return total
-  }
-
-  getActiveKeyCount(): number {
-    return this.apiKeys.filter((key) => {
-      const usage = this.keyUsage.get(key)!
-      return !usage.isBlocked && usage.count < this.maxRequestsPerKey
-    }).length
+    return this.apiKeys.length * 100 // 100 requests per key per hour
   }
 }
 
@@ -126,32 +66,47 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('📊 Get User Usage Function Called')
+    // Get environment variables with fallbacks
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    // Get environment variables
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    console.log('Environment check:', {
+      hasUrl: !!supabaseUrl,
+      hasServiceKey: !!supabaseServiceKey,
+      urlValue: supabaseUrl ? supabaseUrl.substring(0, 20) + '...' : 'missing'
+    });
     
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ Missing Supabase environment variables')
+      console.error('Missing Supabase environment variables:', {
+        SUPABASE_URL: !!supabaseUrl,
+        SUPABASE_SERVICE_ROLE_KEY: !!supabaseServiceKey
+      });
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Server configuration error: Missing environment variables'
+          error: 'Server configuration error: Missing environment variables',
+          details: {
+            hasUrl: !!supabaseUrl,
+            hasServiceKey: !!supabaseServiceKey
+          }
         }),
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
-      )
+      );
     }
 
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey)
+    console.log('Creating Supabase client...');
+    const supabaseClient = createClient(
+      supabaseUrl,
+      supabaseServiceKey
+    )
 
     // Get user from auth header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      console.error('❌ No authorization header')
+      console.error('No authorization header provided');
       return new Response(
         JSON.stringify({
           success: false,
@@ -161,29 +116,32 @@ Deno.serve(async (req) => {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
-      )
+      );
     }
 
     const token = authHeader.replace('Bearer ', '')
+    console.log('Attempting to get user with token...');
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
     
     if (authError || !user) {
-      console.error('❌ Authentication failed:', authError?.message)
+      console.error('Auth error:', authError?.message || 'No user found');
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Invalid authentication'
+          error: 'Invalid authentication',
+          details: authError?.message
         }),
         {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
-      )
+      );
     }
 
-    console.log(`👤 User authenticated: ${user.email}`)
+    console.log('User authenticated:', user.id);
 
     // Get user subscription info
+    console.log('Fetching user subscription...');
     const { data: subscription, error: subError } = await supabaseClient
       .from('user_subscriptions')
       .select('*')
@@ -191,22 +149,23 @@ Deno.serve(async (req) => {
       .single()
 
     if (subError && subError.code !== 'PGRST116') {
-      console.error('❌ Database error:', subError)
+      console.error('Database error:', subError.message, subError.code);
       return new Response(
         JSON.stringify({
           success: false,
-          error: `Database error: ${subError.message}`
+          error: `Database error: ${subError.message}`,
+          details: subError
         }),
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
-      )
+      );
     }
 
-    // Create default subscription if none exists
+    // If no subscription exists, create default free plan
     if (!subscription) {
-      console.log('📝 Creating default subscription for new user')
+      console.log('No subscription found, creating default...');
       const { data: newSub, error: createError } = await supabaseClient
         .from('user_subscriptions')
         .insert({
@@ -219,11 +178,11 @@ Deno.serve(async (req) => {
         .single()
 
       if (createError) {
-        console.error('❌ Error creating subscription:', createError)
+        console.error('Error creating subscription:', createError);
         throw createError
       }
 
-      console.log('✅ Created new subscription')
+      console.log('Created new subscription:', newSub.id);
       return new Response(
         JSON.stringify({
           success: true,
@@ -233,10 +192,7 @@ Deno.serve(async (req) => {
             planType: 'free',
             resetDate: newSub.reset_date,
             remaining: 1
-          },
-          apiKeyStats: keyManager.getKeyStats(),
-          totalAvailableGenerations: keyManager.getTotalAvailableGenerations(),
-          activeKeys: keyManager.getActiveKeyCount()
+          }
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -244,12 +200,14 @@ Deno.serve(async (req) => {
       )
     }
 
+    console.log('Found existing subscription:', subscription.id);
+
     // Check if we need to reset usage
     const now = new Date()
     const resetDate = new Date(subscription.reset_date)
     
     if (now >= resetDate) {
-      console.log('🔄 Resetting usage for new period...')
+      console.log('Resetting usage for new period...');
       const nextResetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
       
       const { data: updatedSub, error: updateError } = await supabaseClient
@@ -263,11 +221,11 @@ Deno.serve(async (req) => {
         .single()
 
       if (updateError) {
-        console.error('❌ Error updating subscription:', updateError)
+        console.error('Error updating subscription:', updateError);
         throw updateError
       }
 
-      console.log('✅ Usage reset successfully')
+      console.log('Usage reset successfully');
       return new Response(
         JSON.stringify({
           success: true,
@@ -277,10 +235,7 @@ Deno.serve(async (req) => {
             planType: updatedSub.plan_type,
             resetDate: updatedSub.reset_date,
             remaining: updatedSub.monthly_limit
-          },
-          apiKeyStats: keyManager.getKeyStats(),
-          totalAvailableGenerations: keyManager.getTotalAvailableGenerations(),
-          activeKeys: keyManager.getActiveKeyCount()
+          }
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -288,7 +243,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('📊 Returning current usage data')
+    console.log('Returning current usage data');
     return new Response(
       JSON.stringify({
         success: true,
@@ -300,8 +255,7 @@ Deno.serve(async (req) => {
           remaining: subscription.monthly_limit - subscription.current_usage
         },
         apiKeyStats: keyManager.getKeyStats(),
-        totalAvailableGenerations: keyManager.getTotalAvailableGenerations(),
-        activeKeys: keyManager.getActiveKeyCount()
+        totalAvailableGenerations: keyManager.getTotalAvailableGenerations()
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -309,12 +263,14 @@ Deno.serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('❌ Usage check error:', error)
+    console.error('Usage check error:', error.message || error)
+    console.error('Error stack:', error.stack)
     
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Internal server error'
+        error: error.message || 'Internal server error',
+        details: error.stack
       }),
       {
         status: 500,
