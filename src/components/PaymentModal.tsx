@@ -137,7 +137,7 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
                   <Smartphone className="w-5 h-5 text-green-400" />
                   <div>
                     <p className="text-white font-medium">Mobile Money</p>
-                    <p className="text-gray-400 text-sm">KBZPay, WavePay, AYAPay</p>
+                    <p className="text-gray-400 text-sm">KBZPay</p>
                   </div>
                 </label>
               </div>
@@ -224,7 +224,7 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-300">Bank Name | ဘဏ်အမည်:</span>
-                    <span className="text-white">KBZ Bank</span>
+                    <span className="text-white">UAB Bank</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-300">Account Name | အကောင့်အမည်:</span>
@@ -233,9 +233,9 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
                   <div className="flex justify-between items-center">
                     <span className="text-gray-300">Account Number | အကောင့်နံပါတ်:</span>
                     <div className="flex items-center space-x-2">
-                      <span className="text-white font-mono">09974902335</span>
+                      <span className="text-white font-mono">019330100016013</span>
                       <button
-                        onClick={() => copyToClipboard('09974902335')}
+                        onClick={() => copyToClipboard('019330100016013')}
                         className="p-1 hover:bg-white/10 rounded"
                       >
                         {copySuccess ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
@@ -279,9 +279,9 @@ export default function PaymentModal({ isOpen, onClose, selectedPackage }: Payme
                   <div className="flex justify-between">
                     <span className="text-gray-300">Phone Number | ဖုန်းနံပါတ်:</span>
                     <div className="flex items-center space-x-2">
-                      <span className="text-white font-mono">09740807009</span>
+                      <span className="text-white font-mono">09974902335</span>
                       <button
-                        onClick={() => copyToClipboard('09740807009')}
+                        onClick={() => copyToClipboard('09974902335')}
                         className="p-1 hover:bg-white/10 rounded"
                       >
                         {copySuccess ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
