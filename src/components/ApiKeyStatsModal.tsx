@@ -9,11 +9,8 @@ interface ApiKeyStatsModalProps {
     index: number;
     usage: number;
     maxUsage: number;
+    resetTime: Date;
     isActive: boolean;
-    isBlocked: boolean;
-    blockUntil: Date | null;
-    successCount: number;
-    failureCount: number;
     lastUsed: Date | null;
   }>;
   totalAvailableGenerations: number;
@@ -29,9 +26,6 @@ export default function ApiKeyStatsModal({
 
   const activeKeys = apiKeyStats.filter(key => key.isActive).length;
   const totalKeys = apiKeyStats.length;
-  const blockedKeys = apiKeyStats.filter(key => key.isBlocked).length;
-  const totalSuccesses = apiKeyStats.reduce((sum, key) => sum + key.successCount, 0);
-  const totalFailures = apiKeyStats.reduce((sum, key) => sum + key.failureCount, 0);
 
   const modalContent = (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
@@ -84,8 +78,8 @@ export default function ApiKeyStatsModal({
             <div className="flex items-center justify-center mb-2">
               <AlertCircle className="w-5 h-5 text-red-400" />
             </div>
-            <p className="text-2xl font-bold text-red-400">{blockedKeys}</p>
-            <p className="text-xs text-gray-400">Blocked</p>
+            <p className="text-2xl font-bold text-red-400">{totalKeys - activeKeys}</p>
+            <p className="text-xs text-gray-400">Rate Limited</p>
           </div>
           
           <div className="bg-purple-500/20 rounded-xl p-4 text-center border border-purple-500/30">
@@ -94,25 +88,6 @@ export default function ApiKeyStatsModal({
             </div>
             <p className="text-2xl font-bold text-purple-400">{totalAvailableGenerations}</p>
             <p className="text-xs text-gray-400">Available</p>
-          </div>
-        </div>
-
-        {/* Success/Failure Stats */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-green-500/20 rounded-xl p-4 text-center border border-green-500/30">
-            <div className="flex items-center justify-center mb-2">
-              <CheckCircle className="w-5 h-5 text-green-400" />
-            </div>
-            <p className="text-2xl font-bold text-green-400">{totalSuccesses}</p>
-            <p className="text-xs text-gray-400">Total Successes</p>
-          </div>
-          
-          <div className="bg-red-500/20 rounded-xl p-4 text-center border border-red-500/30">
-            <div className="flex items-center justify-center mb-2">
-              <AlertCircle className="w-5 h-5 text-red-400" />
-            </div>
-            <p className="text-2xl font-bold text-red-400">{totalFailures}</p>
-            <p className="text-xs text-gray-400">Total Failures</p>
           </div>
         </div>
 
@@ -126,41 +101,30 @@ export default function ApiKeyStatsModal({
           {apiKeyStats.map((keyStats) => {
             const usagePercentage = (keyStats.usage / keyStats.maxUsage) * 100;
             const isNearLimit = usagePercentage > 80;
-            const successRate = keyStats.successCount + keyStats.failureCount > 0 
-              ? (keyStats.successCount / (keyStats.successCount + keyStats.failureCount)) * 100 
-              : 100;
             
             return (
               <div
                 key={keyStats.index}
                 className={`p-4 rounded-xl border transition-all ${
-                  keyStats.isActive && !keyStats.isBlocked
+                  keyStats.isActive
                     ? 'bg-green-500/10 border-green-500/30'
-                    : keyStats.isBlocked
-                    ? 'bg-red-500/10 border-red-500/30'
-                    : 'bg-yellow-500/10 border-yellow-500/30'
+                    : 'bg-red-500/10 border-red-500/30'
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">
                     <div className={`w-3 h-3 rounded-full ${
-                      keyStats.isActive && !keyStats.isBlocked 
-                        ? 'bg-green-400' 
-                        : keyStats.isBlocked 
-                        ? 'bg-red-400' 
-                        : 'bg-yellow-400'
+                      keyStats.isActive ? 'bg-green-400' : 'bg-red-400'
                     }`} />
                     <span className="text-white font-medium">
                       API Key #{keyStats.index}
                     </span>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      keyStats.isActive && !keyStats.isBlocked
+                      keyStats.isActive
                         ? 'bg-green-500/20 text-green-400'
-                        : keyStats.isBlocked
-                        ? 'bg-red-500/20 text-red-400'
-                        : 'bg-yellow-500/20 text-yellow-400'
+                        : 'bg-red-500/20 text-red-400'
                     }`}>
-                      {keyStats.isBlocked ? 'Blocked' : keyStats.isActive ? 'Active' : 'Rate Limited'}
+                      {keyStats.isActive ? 'Active' : 'Rate Limited'}
                     </span>
                   </div>
                   
@@ -178,7 +142,7 @@ export default function ApiKeyStatsModal({
                 <div className="w-full bg-gray-700 rounded-full h-2 mb-3">
                   <div
                     className={`h-2 rounded-full transition-all ${
-                      keyStats.isActive && !keyStats.isBlocked
+                      keyStats.isActive
                         ? isNearLimit
                           ? 'bg-gradient-to-r from-yellow-500 to-orange-500'
                           : 'bg-gradient-to-r from-green-500 to-blue-500'
@@ -188,26 +152,13 @@ export default function ApiKeyStatsModal({
                   />
                 </div>
                 
-                {/* Success Rate */}
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-400">Success Rate:</span>
-                  <span className={`text-xs font-medium ${
-                    successRate >= 90 ? 'text-green-400' : 
-                    successRate >= 70 ? 'text-yellow-400' : 'text-red-400'
-                  }`}>
-                    {successRate.toFixed(1)}% ({keyStats.successCount}/{keyStats.successCount + keyStats.failureCount})
-                  </span>
-                </div>
-                
                 {/* Additional Info */}
                 <div className="flex items-center justify-between text-xs text-gray-400">
                   <div className="flex items-center space-x-4">
-                    {keyStats.isBlocked && keyStats.blockUntil && (
-                      <span className="flex items-center space-x-1 text-red-400">
-                        <Clock className="w-3 h-3" />
-                        <span>Blocked until: {keyStats.blockUntil.toLocaleTimeString()}</span>
-                      </span>
-                    )}
+                    <span className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3" />
+                      <span>Resets: {keyStats.resetTime.toLocaleTimeString()}</span>
+                    </span>
                   </div>
                   
                   {keyStats.lastUsed && (
@@ -228,8 +179,8 @@ export default function ApiKeyStatsModal({
             <div>
               <h4 className="text-sm font-semibold text-blue-400 mb-1">Auto Key Rotation</h4>
               <p className="text-xs text-gray-300 leading-relaxed">
-                The system automatically rotates between API keys for optimal performance. Failed keys are temporarily blocked, 
-                and usage is distributed evenly. Keys automatically recover after cooldown periods and hourly resets.
+                The system automatically rotates between available API keys to distribute load and avoid rate limits. 
+                Keys reset their usage counters every hour. When a key hits its limit, the system switches to the next available key.
               </p>
             </div>
           </div>
