@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Play, Heart, MoreHorizontal, Plus, Shuffle, RefreshCw, Pause } from 'lucide-react';
+import { Play, Heart, MoreHorizontal, Plus, Shuffle, RefreshCw } from 'lucide-react';
 import { Track, Playlist } from '../types/music';
 import { formatTime } from '../utils/formatTime';
 import GenreSelector from './GenreSelector';
@@ -43,7 +43,7 @@ export default function MusicLibrary({
   useEffect(() => {
     if (!currentTrack?.previewUrl) return;
 
-    const setupVisualizer = async () => {
+    const setupVisualizer = () => {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 128;
@@ -333,5 +333,4 @@ export default function MusicLibrary({
         </section>
       </div>
     );
-  );
-}
+  }
