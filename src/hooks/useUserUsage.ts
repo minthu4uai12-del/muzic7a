@@ -13,8 +13,11 @@ interface UserUsage {
     index: number;
     usage: number;
     maxUsage: number;
-    resetTime: Date;
     isActive: boolean;
+    isBlocked: boolean;
+    blockUntil: Date | null;
+    successCount: number;
+    failureCount: number;
     lastUsed: Date | null;
   }>;
   totalAvailableGenerations?: number;

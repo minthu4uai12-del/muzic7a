@@ -418,21 +418,6 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
             ))}
           </div>
         </div>
-      )}
-
-      <SaveTrackModal
-        isOpen={showSaveModal}
-        onClose={() => setShowSaveModal(false)}
-        track={trackToSave}
-        onSave={handleSaveConfirm}
-      />
-
-      <ApiKeyStatsModal
-        isOpen={showApiStats}
-        onClose={() => setShowApiStats(false)}
-        apiKeyStats={usage?.apiKeyStats || []}
-        totalAvailableGenerations={usage?.totalAvailableGenerations || 0}
-      />
     </div>
   );
 }

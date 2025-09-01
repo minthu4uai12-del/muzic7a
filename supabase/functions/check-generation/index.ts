@@ -24,166 +24,182 @@ interface KieAIStatusResponse {
   }
 }
 
-class MultiKeyManager {
+class MultiKeyRotationManager {
   private apiKeys: string[] = []
-  private currentKeyIndex: number = 0
-  private keyUsage: Map<string, { count: number; resetTime: number; lastUsed: number }> = new Map()
-  private maxRequestsPerKey: number = 100
-  private resetInterval: number = 60 * 60 * 1000
-  private keyRotationDelay: number = 1000
+  private keyStats: Map<string, {
+    usage: number
+    lastUsed: number
+    isBlocked: boolean
+    blockUntil: number
+    successCount: number
+    failureCount: number
+  }> = new Map()
+  
+  private maxRequestsPerHour = 50
+  private blockDuration = 3 * 60 * 1000 // 3 minutes
+  private rotationDelay = 500 // 0.5 second between key switches
 
   constructor() {
-    this.loadApiKeysFromEnvironment()
-    this.initializeKeyUsageTracking()
-    console.log(`🔑 Check-Generation: Initialized with ${this.apiKeys.length} API keys`)
+    this.loadApiKeysFromSecrets()
+    this.initializeKeyTracking()
+    console.log(`🔑 Check-Generation: MultiKeyRotationManager initialized with ${this.apiKeys.length} API keys`)
   }
 
-  private loadApiKeysFromEnvironment(): void {
+  private loadApiKeysFromSecrets(): void {
     const keys: string[] = []
     
-    console.log('🔍 Check-Generation: Loading API keys from environment...')
+    console.log('🔍 Check-Generation: Loading API keys from Supabase Edge Function secrets...')
     
-    // Check for multiple key format: MUSIC_AI_API_KEY_1, MUSIC_AI_API_KEY_2, etc.
-    for (let i = 1; i <= 20; i++) {
+    // Load multiple keys from secrets: MUSIC_AI_API_KEY_1, MUSIC_AI_API_KEY_2, etc.
+    for (let i = 1; i <= 50; i++) {
       const key = Deno.env.get(`MUSIC_AI_API_KEY_${i}`)
-      if (key && key.trim() && key !== 'your_api_key_here') {
+      if (key && key.trim() && key.length > 10 && !key.includes('your_') && !key.includes('placeholder')) {
         keys.push(key.trim())
-        console.log(`✅ Check-Generation: Added API key ${i}`)
+        console.log(`✅ Check-Generation: Loaded API key ${i}`)
       }
     }
     
-    // Fallback to single key
+    // Fallback to single key if no numbered keys found
     if (keys.length === 0) {
       const singleKey = Deno.env.get('MUSIC_AI_API_KEY')
-      if (singleKey && singleKey.trim() && singleKey !== 'your_api_key_here') {
+      if (singleKey && singleKey.trim() && singleKey.length > 10) {
         keys.push(singleKey.trim())
-        console.log('✅ Check-Generation: Added fallback API key')
+        console.log(`✅ Check-Generation: Loaded fallback API key`)
       }
     }
     
-    // Default fallback key if no environment variables
     if (keys.length === 0) {
-      console.log('⚠️ Check-Generation: No API keys found, using fallback')
-      keys.push('4f52e3f37a67bb5aed649a471e9989b9')
+      console.error('❌ Check-Generation: No valid API keys found in secrets!')
+      throw new Error('No API keys configured in Supabase Edge Function secrets')
     }
     
     this.apiKeys = keys
-    console.log(`📊 Check-Generation: Total API keys loaded: ${this.apiKeys.length}`)
+    console.log(`📊 Check-Generation: Successfully loaded ${this.apiKeys.length} API keys`)
   }
 
-  private initializeKeyUsageTracking(): void {
-    this.apiKeys.forEach((key) => {
-      this.keyUsage.set(key, { 
-        count: 0, 
-        resetTime: Date.now() + this.resetInterval,
-        lastUsed: 0
+  private initializeKeyTracking(): void {
+    this.apiKeys.forEach(key => {
+      this.keyStats.set(key, {
+        usage: 0,
+        lastUsed: 0,
+        isBlocked: false,
+        blockUntil: 0,
+        successCount: 0,
+        failureCount: 0
       })
     })
   }
 
-  private getNextAvailableKey(): { key: string; index: number } {
+  private getNextAvailableKey(): { key: string; index: number } | null {
     const now = Date.now()
     
-    // Reset usage counters for keys whose reset time has passed
-    this.keyUsage.forEach((usage, key) => {
-      if (now >= usage.resetTime) {
-        this.keyUsage.set(key, { 
-          count: 0, 
-          resetTime: now + this.resetInterval,
-          lastUsed: usage.lastUsed
-        })
+    // Unblock keys whose block period has expired
+    this.keyStats.forEach((stats, key) => {
+      if (stats.isBlocked && now >= stats.blockUntil) {
+        stats.isBlocked = false
+        console.log(`🔓 Check-Generation: Unblocked API key ${key.substring(0, 8)}...`)
       }
     })
     
-    // Find the least recently used key that's under the rate limit
-    for (let i = 0; i < this.apiKeys.length; i++) {
-      const keyIndex = (this.currentKeyIndex + i) % this.apiKeys.length
-      const key = this.apiKeys[keyIndex]
-      const usage = this.keyUsage.get(key)!
-      
-      const isUnderRateLimit = usage.count < this.maxRequestsPerKey
-      const hasDelayPassed = (now - usage.lastUsed) >= this.keyRotationDelay
-      
-      if (isUnderRateLimit && hasDelayPassed) {
-        this.currentKeyIndex = keyIndex
-        return { key, index: keyIndex }
+    // Find available keys
+    const availableKeys = this.apiKeys
+      .map((key, index) => ({ key, index, stats: this.keyStats.get(key)! }))
+      .filter(({ stats }) => 
+        !stats.isBlocked && 
+        stats.usage < this.maxRequestsPerHour &&
+        (now - stats.lastUsed) >= this.rotationDelay
+      )
+      .sort((a, b) => a.stats.usage - b.stats.usage)
+
+    if (availableKeys.length === 0) {
+      // Try non-blocked keys without delay requirement
+      const nonBlockedKeys = this.apiKeys
+        .map((key, index) => ({ key, index, stats: this.keyStats.get(key)! }))
+        .filter(({ stats }) => !stats.isBlocked && stats.usage < this.maxRequestsPerHour)
+        .sort((a, b) => a.stats.usage - b.stats.usage)
+
+      if (nonBlockedKeys.length > 0) {
+        return { key: nonBlockedKeys[0].key, index: nonBlockedKeys[0].index }
       }
+      
+      return null
     }
-    
-    // If all keys are recently used, use the one with lowest usage
-    let bestKey = this.apiKeys[0]
-    let bestIndex = 0
-    let lowestUsage = this.keyUsage.get(bestKey)!.count
-    
-    this.apiKeys.forEach((key, index) => {
-      const usage = this.keyUsage.get(key)!
-      if (usage.count < lowestUsage) {
-        bestKey = key
-        bestIndex = index
-        lowestUsage = usage.count
-      }
-    })
-    
-    this.currentKeyIndex = bestIndex
-    return { key: bestKey, index: bestIndex }
+
+    return { key: availableKeys[0].key, index: availableKeys[0].index }
   }
 
-  private incrementKeyUsage(apiKey: string): void {
-    const usage = this.keyUsage.get(apiKey)
-    if (usage) {
-      usage.count++
-      usage.lastUsed = Date.now()
+  private updateKeyStats(key: string, success: boolean): void {
+    const stats = this.keyStats.get(key)
+    if (!stats) return
+
+    const now = Date.now()
+    stats.usage++
+    stats.lastUsed = now
+
+    if (success) {
+      stats.successCount++
+    } else {
+      stats.failureCount++
+      stats.isBlocked = true
+      stats.blockUntil = now + this.blockDuration
+    }
+
+    if (stats.usage >= this.maxRequestsPerHour) {
+      stats.isBlocked = true
+      stats.blockUntil = now + (60 * 60 * 1000) // Block for 1 hour
     }
   }
 
-  async makeRequest(url: string, options: RequestInit, maxRetries: number = 3): Promise<Response> {
+  async makeRequestWithRotation(url: string, options: RequestInit): Promise<Response> {
+    const maxAttempts = Math.min(this.apiKeys.length, 3)
     let lastError: Error | null = null
-    
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const keyInfo = this.getNextAvailableKey()
+      
+      if (!keyInfo) {
+        throw new Error('No available API keys for status check')
+      }
+
+      const { key, index } = keyInfo
+
       try {
-        const { key, index } = this.getNextAvailableKey()
-        
         const headers = {
           'Authorization': `Bearer ${key}`,
           'Content-Type': 'application/json',
           ...options.headers
         }
-        
-        console.log(`🔍 Check-Generation: Using API key ${index + 1} for status check`)
+
         const response = await fetch(url, { ...options, headers })
-        
-        this.incrementKeyUsage(key)
-        
+
         if (response.status === 429) {
-          console.warn(`⚠️ Check-Generation: Rate limited on key ${index + 1}`)
-          const usage = this.keyUsage.get(key)!
-          usage.count = this.maxRequestsPerKey
+          this.updateKeyStats(key, false)
           continue
         }
-        
+
         if (!response.ok) {
+          this.updateKeyStats(key, false)
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
-        
+
+        this.updateKeyStats(key, true)
         return response
-        
+
       } catch (error) {
         lastError = error as Error
-        console.error(`❌ Check-Generation: Request failed on attempt ${attempt + 1}:`, error)
+        this.updateKeyStats(key, false)
         
-        if (attempt === maxRetries - 1) {
-          break
+        if (attempt < maxAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500))
         }
-        
-        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
       }
     }
-    
-    throw lastError || new Error('All retry attempts failed')
+
+    throw lastError || new Error('All API key attempts failed')
   }
 }
 
-const keyManager = new MultiKeyManager()
+const keyManager = new MultiKeyRotationManager()
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -236,8 +252,8 @@ Deno.serve(async (req) => {
     console.log(`🔍 Checking generation status for task: ${taskId}`)
 
     try {
-      // Check generation status using multi-key manager
-      const kieResponse = await keyManager.makeRequest(
+      // Check generation status using multi-key rotation manager
+      const kieResponse = await keyManager.makeRequestWithRotation(
         `https://api.kie.ai/api/v1/generate/record-info?taskId=${taskId}`,
         {
           method: 'GET'
@@ -253,9 +269,8 @@ Deno.serve(async (req) => {
 
       // Handle failed generation - revert usage if needed
       if (result.data.status?.includes('FAILED') || result.data.status === 'SENSITIVE_WORD_ERROR') {
-        console.log('❌ Generation failed, checking if we need to revert usage...')
+        console.log('❌ Generation failed, reverting usage...')
         
-        // Try to revert usage for this user if generation failed
         try {
           const { data: currentSub } = await supabaseClient
             .from('user_subscriptions')

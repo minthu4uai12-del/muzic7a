@@ -6,59 +6,95 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
 
-class MultiKeyManager {
+class MultiKeyRotationManager {
   private apiKeys: string[] = []
+  private keyStats: Map<string, {
+    usage: number
+    lastUsed: number
+    isBlocked: boolean
+    blockUntil: number
+    successCount: number
+    failureCount: number
+  }> = new Map()
 
   constructor() {
-    this.loadApiKeysFromEnvironment()
-    console.log(`🔑 Get-Usage: Initialized with ${this.apiKeys.length} API keys`)
+    this.loadApiKeysFromSecrets()
+    this.initializeKeyTracking()
+    console.log(`🔑 Get-Usage: MultiKeyRotationManager initialized with ${this.apiKeys.length} API keys`)
   }
 
-  private loadApiKeysFromEnvironment(): void {
+  private loadApiKeysFromSecrets(): void {
     const keys: string[] = []
     
-    console.log('🔍 Get-Usage: Loading API keys from environment...')
+    console.log('🔍 Get-Usage: Loading API keys from Supabase Edge Function secrets...')
     
-    // Check for multiple key format: MUSIC_AI_API_KEY_1, MUSIC_AI_API_KEY_2, etc.
-    for (let i = 1; i <= 20; i++) {
+    // Load multiple keys from secrets: MUSIC_AI_API_KEY_1, MUSIC_AI_API_KEY_2, etc.
+    for (let i = 1; i <= 50; i++) {
       const key = Deno.env.get(`MUSIC_AI_API_KEY_${i}`)
-      if (key && key.trim() && key !== 'your_api_key_here') {
+      if (key && key.trim() && key.length > 10 && !key.includes('your_') && !key.includes('placeholder')) {
         keys.push(key.trim())
-        console.log(`✅ Get-Usage: Found API key ${i}`)
+        console.log(`✅ Get-Usage: Loaded API key ${i}`)
       }
     }
     
-    // Fallback to single key
+    // Fallback to single key if no numbered keys found
     if (keys.length === 0) {
       const singleKey = Deno.env.get('MUSIC_AI_API_KEY')
-      if (singleKey && singleKey.trim() && singleKey !== 'your_api_key_here') {
+      if (singleKey && singleKey.trim() && singleKey.length > 10) {
         keys.push(singleKey.trim())
-        console.log('✅ Get-Usage: Found fallback API key')
+        console.log(`✅ Get-Usage: Loaded fallback API key`)
       }
     }
     
     this.apiKeys = keys
-    console.log(`📊 Get-Usage: Total API keys loaded: ${this.apiKeys.length}`)
+    console.log(`📊 Get-Usage: Successfully loaded ${this.apiKeys.length} API keys`)
   }
 
-  getKeyStats() {
-    const now = Date.now()
-    return this.apiKeys.map((key, index) => ({
-      index: index + 1,
-      usage: 0, // Reset for demo purposes
-      maxUsage: 100,
-      resetTime: new Date(now + 60 * 60 * 1000), // 1 hour from now
-      isActive: true,
-      lastUsed: null
-    }))
+  private initializeKeyTracking(): void {
+    this.apiKeys.forEach(key => {
+      this.keyStats.set(key, {
+        usage: 0,
+        lastUsed: 0,
+        isBlocked: false,
+        blockUntil: 0,
+        successCount: 0,
+        failureCount: 0
+      })
+    })
+  }
+
+  getKeyStatistics() {
+    return this.apiKeys.map((key, index) => {
+      const stats = this.keyStats.get(key)!
+      return {
+        index: index + 1,
+        usage: stats.usage,
+        maxUsage: 50, // 50 requests per hour
+        isActive: !stats.isBlocked && stats.usage < 50,
+        isBlocked: stats.isBlocked,
+        blockUntil: stats.isBlocked ? new Date(stats.blockUntil) : null,
+        successCount: stats.successCount,
+        failureCount: stats.failureCount,
+        lastUsed: stats.lastUsed > 0 ? new Date(stats.lastUsed) : null
+      }
+    })
   }
 
   getTotalAvailableGenerations(): number {
-    return this.apiKeys.length * 100 // 100 requests per key per hour
+    const now = Date.now()
+    let total = 0
+    
+    this.keyStats.forEach((stats) => {
+      if (!stats.isBlocked || now >= stats.blockUntil) {
+        total += Math.max(0, 50 - stats.usage)
+      }
+    })
+    
+    return total
   }
 }
 
-const keyManager = new MultiKeyManager()
+const keyManager = new MultiKeyRotationManager()
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -66,47 +102,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Get environment variables with fallbacks
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    console.log('Environment check:', {
-      hasUrl: !!supabaseUrl,
-      hasServiceKey: !!supabaseServiceKey,
-      urlValue: supabaseUrl ? supabaseUrl.substring(0, 20) + '...' : 'missing'
-    });
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Missing Supabase environment variables:', {
-        SUPABASE_URL: !!supabaseUrl,
-        SUPABASE_SERVICE_ROLE_KEY: !!supabaseServiceKey
-      });
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Server configuration error: Missing environment variables',
-          details: {
-            hasUrl: !!supabaseUrl,
-            hasServiceKey: !!supabaseServiceKey
-          }
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    console.log('Creating Supabase client...');
     const supabaseClient = createClient(
-      supabaseUrl,
-      supabaseServiceKey
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
     // Get user from auth header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      console.error('No authorization header provided');
       return new Response(
         JSON.stringify({
           success: false,
@@ -116,32 +119,38 @@ Deno.serve(async (req) => {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
-      );
+      )
     }
 
     const token = authHeader.replace('Bearer ', '')
-    console.log('Attempting to get user with token...');
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
     
     if (authError || !user) {
-      console.error('Auth error:', authError?.message || 'No user found');
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Invalid authentication',
-          details: authError?.message
+          error: 'Invalid authentication'
         }),
         {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
-      );
+      )
     }
 
-    console.log('User authenticated:', user.id);
+    console.log('Get-Usage: User authenticated:', user.id)
+
+    // Check if user is admin
+    const { data: adminUser } = await supabaseClient
+      .from('admin_users')
+      .select('*')
+      .eq('id', user.id)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    const isAdmin = !!adminUser
 
     // Get user subscription info
-    console.log('Fetching user subscription...');
     const { data: subscription, error: subError } = await supabaseClient
       .from('user_subscriptions')
       .select('*')
@@ -149,23 +158,22 @@ Deno.serve(async (req) => {
       .single()
 
     if (subError && subError.code !== 'PGRST116') {
-      console.error('Database error:', subError.message, subError.code);
+      console.error('Get-Usage: Database error:', subError)
       return new Response(
         JSON.stringify({
           success: false,
-          error: `Database error: ${subError.message}`,
-          details: subError
+          error: `Database error: ${subError.message}`
         }),
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
-      );
+      )
     }
 
     // If no subscription exists, create default free plan
     if (!subscription) {
-      console.log('No subscription found, creating default...');
+      console.log('Get-Usage: Creating default subscription...')
       const { data: newSub, error: createError } = await supabaseClient
         .from('user_subscriptions')
         .insert({
@@ -178,36 +186,41 @@ Deno.serve(async (req) => {
         .single()
 
       if (createError) {
-        console.error('Error creating subscription:', createError);
+        console.error('Get-Usage: Error creating subscription:', createError)
         throw createError
       }
 
-      console.log('Created new subscription:', newSub.id);
+      const responseData: any = {
+        success: true,
+        usage: {
+          current: 0,
+          limit: 1,
+          planType: 'free',
+          resetDate: newSub.reset_date,
+          remaining: 1
+        }
+      }
+
+      // Only include API key statistics for admin users
+      if (isAdmin) {
+        responseData.apiKeyStats = keyManager.getKeyStatistics()
+        responseData.totalAvailableGenerations = keyManager.getTotalAvailableGenerations()
+      }
+
       return new Response(
-        JSON.stringify({
-          success: true,
-          usage: {
-            current: 0,
-            limit: 1,
-            planType: 'free',
-            resetDate: newSub.reset_date,
-            remaining: 1
-          }
-        }),
+        JSON.stringify(responseData),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
 
-    console.log('Found existing subscription:', subscription.id);
-
     // Check if we need to reset usage
     const now = new Date()
     const resetDate = new Date(subscription.reset_date)
     
     if (now >= resetDate) {
-      console.log('Resetting usage for new period...');
+      console.log('Get-Usage: Resetting usage for new period...')
       const nextResetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
       
       const { data: updatedSub, error: updateError } = await supabaseClient
@@ -221,56 +234,69 @@ Deno.serve(async (req) => {
         .single()
 
       if (updateError) {
-        console.error('Error updating subscription:', updateError);
+        console.error('Get-Usage: Error updating subscription:', updateError)
         throw updateError
       }
 
-      console.log('Usage reset successfully');
+      const responseData: any = {
+        success: true,
+        usage: {
+          current: 0,
+          limit: updatedSub.monthly_limit,
+          planType: updatedSub.plan_type,
+          resetDate: updatedSub.reset_date,
+          remaining: updatedSub.monthly_limit
+        }
+      }
+
+      // Only include API key statistics for admin users
+      if (isAdmin) {
+        responseData.apiKeyStats = keyManager.getKeyStatistics()
+        responseData.totalAvailableGenerations = keyManager.getTotalAvailableGenerations()
+      }
+
       return new Response(
-        JSON.stringify({
-          success: true,
-          usage: {
-            current: 0,
-            limit: updatedSub.monthly_limit,
-            planType: updatedSub.plan_type,
-            resetDate: updatedSub.reset_date,
-            remaining: updatedSub.monthly_limit
-          }
-        }),
+        JSON.stringify(responseData),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
 
-    console.log('Returning current usage data');
+    console.log('Get-Usage: Returning current usage data')
+    
+    const responseData: any = {
+      success: true,
+      usage: {
+        current: subscription.current_usage,
+        limit: subscription.monthly_limit,
+        planType: subscription.plan_type,
+        resetDate: subscription.reset_date,
+        remaining: subscription.monthly_limit - subscription.current_usage
+      }
+    }
+
+    // Only include API key statistics for admin users
+    if (isAdmin) {
+      responseData.apiKeyStats = keyManager.getKeyStatistics()
+      responseData.totalAvailableGenerations = keyManager.getTotalAvailableGenerations()
+      console.log(`👑 Admin user - including API key statistics`)
+    }
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        usage: {
-          current: subscription.current_usage,
-          limit: subscription.monthly_limit,
-          planType: subscription.plan_type,
-          resetDate: subscription.reset_date,
-          remaining: subscription.monthly_limit - subscription.current_usage
-        },
-        apiKeyStats: keyManager.getKeyStats(),
-        totalAvailableGenerations: keyManager.getTotalAvailableGenerations()
-      }),
+      JSON.stringify(responseData),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
 
   } catch (error) {
-    console.error('Usage check error:', error.message || error)
-    console.error('Error stack:', error.stack)
+    console.error('Get-Usage: Error:', error)
     
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Internal server error',
-        details: error.stack
+        error: error.message || 'Internal server error'
       }),
       {
         status: 500,
