@@ -19,7 +19,7 @@ const styles = [
 export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicGeneratorProps) {
   const [prompt, setPrompt] = useState('');
   const [options, setOptions] = useState<GenerationOptions>({
-    customMode: false,
+    customMode: true,
     instrumental: false,
     model: 'V3_5',
     style: '',
@@ -34,7 +34,7 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
   const [error, setError] = useState('');
   const [showApiStats, setShowApiStats] = useState(false);
   const { saveTrack } = useSavedTracks();
-  const { generateMusic, checkGenerationStatus, usage, loadUsage } = useUserUsage();
+  const { generateMusic, checkGenerationStatus, usage } = useUserUsage();
 
   const downloadAudio = async (url: string, title: string) => {
     try {
@@ -232,7 +232,7 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
             >
               <Zap className="w-4 h-4" />
               <span>
-                Active Servers: {usage.apiKeyStats.filter(k => k.isActive).length}/{usage.apiKeyStats.length} Active
+                API Keys: {usage.apiKeyStats.filter(k => k.isActive).length}/{usage.apiKeyStats.length} Active
                 {usage.totalAvailableGenerations && ` (${usage.totalAvailableGenerations} available)`}
               </span>
             </button>
