@@ -232,7 +232,7 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
             >
               <Zap className="w-4 h-4" />
               <span>
-                API Keys: {usage.apiKeyStats.filter(k => k.isActive).length}/{usage.apiKeyStats.length} Active
+                Active Servers: {usage.apiKeyStats.filter(k => k.isActive).length}/{usage.apiKeyStats.length} Active
                 {usage.totalAvailableGenerations && ` (${usage.totalAvailableGenerations} available)`}
               </span>
             </button>
