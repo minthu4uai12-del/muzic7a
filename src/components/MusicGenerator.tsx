@@ -34,7 +34,7 @@ export default function MusicGenerator({ onTrackGenerated, onPlayTrack }: MusicG
   const [error, setError] = useState('');
   const [showApiStats, setShowApiStats] = useState(false);
   const { saveTrack } = useSavedTracks();
-  const { generateMusic, checkGenerationStatus, usage } = useUserUsage();
+  const { generateMusic, checkGenerationStatus, usage, loadUsage } = useUserUsage();
 
   const downloadAudio = async (url: string, title: string) => {
     try {
