@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Music, Sparkles, Library, Heart, Clock, Globe, User as UserIcon, CreditCard, Shield, Crown } from 'lucide-react';
+import { Home, Music, Sparkles, Library, Heart, Clock, Globe, User as UserIcon, CreditCard, Shield, Crown, Video } from 'lucide-react';
 import { User } from '@supabase/supabase-js';
 import { useAdmin } from '../hooks/useAdmin';
 
@@ -17,8 +17,10 @@ export default function Sidebar({ currentView, onViewChange, user }: SidebarProp
     { id: 'library', label: 'Your Library', icon: Library },
     { id: 'public', label: 'Public Feed', icon: Globe },
     { id: 'generator', label: 'AI Generator', icon: Sparkles, requireAuth: true },
+    { id: 'video-generator', label: '🎬 Video Generator', icon: Video, requireAuth: true },
     { id: 'mymusic', label: 'My Music', icon: UserIcon, requireAuth: true },
     { id: 'packages', label: '💎 Buy AI Packs', icon: CreditCard, requireAuth: true },
+    { id: 'video-packages', label: '🎬 Video Packs', icon: Video, requireAuth: true },
     { id: 'liked', label: 'Liked Songs', icon: Heart, requireAuth: true },
     { id: 'recent', label: 'Recently Played', icon: Clock, requireAuth: true },
   ];

@@ -6,6 +6,7 @@ A modern music streaming platform with AI music generation capabilities, built f
 
 - 🎵 **Free Music Streaming** - Access thousands of free tracks from Jamendo
 - 🤖 **AI Music Generation** - Create custom music with AI (powered by Suno AI)
+- 🎬 **AI Music Video Generation** - Create singing videos from AI music tracks (powered by Wavespeed AI)
 - 💎 **Payment System** - Myanmar-friendly payment options (Bank Transfer, Mobile Money)
 - 🌍 **Public Music Feed** - Share and discover community-generated music
 - 👤 **User Profiles** - Personal music libraries and preferences
@@ -31,6 +32,9 @@ VITE_MUSIC_AI_API_KEY_1=your_first_api_key
 VITE_MUSIC_AI_API_KEY_2=your_second_api_key
 VITE_MUSIC_AI_API_KEY_3=your_third_api_key
 # ... up to VITE_MUSIC_AI_API_KEY_20
+
+# Wavespeed AI API Key (for video generation)
+WAVESPEED_API_KEY=your_wavespeed_api_key
 ```
 
 ### 2. Supabase Edge Functions
@@ -42,6 +46,9 @@ MUSIC_AI_API_KEY_1=your_first_api_key
 MUSIC_AI_API_KEY_2=your_second_api_key
 MUSIC_AI_API_KEY_3=your_third_api_key
 # ... up to MUSIC_AI_API_KEY_20
+
+# Video generation
+WAVESPEED_API_KEY=your_wavespeed_api_key
 ```
 
 ### 3. Admin Account
@@ -62,6 +69,12 @@ Supports Myanmar payment methods:
 - **Bank Transfer**: KBZ Bank and other local banks
 - **Mobile Money**: KBZPay, WavePay, AYAPay
 - **Manual Verification**: Admin approval process for all payments
+
+### Video Generation Packs
+- **5 Video Pack**: 30,000 MMK
+- **Features**: Create singing videos from AI music tracks with custom avatars
+- **Quality**: Support for 480p and 720p video generation
+- **Duration**: Works with 30-second AI music tracks
 
 ## Tech Stack
 

@@ -7,6 +7,8 @@ import MusicPlayer from './components/MusicPlayer';
 import MyMusicLibrary from './components/MyMusicLibrary';
 import PublicMusicFeed from './components/PublicMusicFeed';
 import PaymentPackages from './components/PaymentPackages';
+import VideoGenerator from './components/VideoGenerator';
+import VideoPackages from './components/VideoPackages';
 import AdminPanel from './components/AdminPanel';
 import LoadingSpinner from './components/LoadingSpinner';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -61,18 +63,24 @@ function App() {
   // Listen for navigation events
   React.useEffect(() => {
     const handleNavigateToPackages = () => setCurrentView('packages');
+    const handleNavigateToVideoPackages = () => setCurrentView('video-packages');
     const handleNavigateToGenerator = () => setCurrentView('generator');
+    const handleNavigateToVideoGenerator = () => setCurrentView('video-generator');
     const handleNavigateToMyMusic = () => setCurrentView('mymusic');
     const handleNavigateToAdmin = () => setCurrentView('admin');
     
     window.addEventListener('navigate-to-packages', handleNavigateToPackages);
+    window.addEventListener('navigate-to-video-packages', handleNavigateToVideoPackages);
     window.addEventListener('navigate-to-generator', handleNavigateToGenerator);
+    window.addEventListener('navigate-to-video-generator', handleNavigateToVideoGenerator);
     window.addEventListener('navigate-to-mymusic', handleNavigateToMyMusic);
     window.addEventListener('navigate-to-admin', handleNavigateToAdmin);
     
     return () => {
       window.removeEventListener('navigate-to-packages', handleNavigateToPackages);
+      window.removeEventListener('navigate-to-video-packages', handleNavigateToVideoPackages);
       window.removeEventListener('navigate-to-generator', handleNavigateToGenerator);
+      window.removeEventListener('navigate-to-video-generator', handleNavigateToVideoGenerator);
       window.removeEventListener('navigate-to-mymusic', handleNavigateToMyMusic);
       window.removeEventListener('navigate-to-admin', handleNavigateToAdmin);
     };
@@ -187,6 +195,18 @@ function App() {
         return (
           <ProtectedRoute requireAuth={true}>
             <PaymentPackages />
+          </ProtectedRoute>
+        );
+      case 'video-generator':
+        return (
+          <ProtectedRoute requireAuth={true}>
+            <VideoGenerator />
+          </ProtectedRoute>
+        );
+      case 'video-packages':
+        return (
+          <ProtectedRoute requireAuth={true}>
+            <VideoPackages />
           </ProtectedRoute>
         );
       case 'admin':
