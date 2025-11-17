@@ -39,22 +39,16 @@ export function useAuth() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-       options: {
-         emailRedirectTo: undefined,
-         data: {
-           email_confirm: false
-         }
-       }
       });
       return { data, error };
     } catch (error: any) {
       console.error('Sign up error:', error);
-      return { 
-        data: null, 
-        error: { 
+      return {
+        data: null,
+        error: {
           message: error.message || 'Sign up failed',
           name: error.name || 'SignUpError'
-        } 
+        }
       };
     }
   };
