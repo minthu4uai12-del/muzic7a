@@ -131,15 +131,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </div>
         )}
 
-        {/* Development Notice */}
-        {import.meta.env.DEV && (
-          <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/30 rounded-lg">
-            <p className="text-blue-400 text-sm">
-              <strong>Development Mode:</strong> If signup fails, check browser console for detailed error messages.
-            </p>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
