@@ -112,7 +112,7 @@ export function useSavedTracks() {
         duration: Math.max(1, Math.floor(track.duration) || 180),
         audio_url: track.audioUrl,
         image_url: track.imageUrl || 'https://images.pexels.com/photos/1190297/pexels-photo-1190297.jpeg?auto=compress&cs=tinysrgb&w=800',
-        tags: track.tags || null,
+        tags: track.tags ? (typeof track.tags === 'string' ? track.tags.split(',').map((t: string) => t.trim()) : track.tags) : null,
         prompt: track.prompt || null,
         task_id: track.taskId || null,
         is_public: isPublic,
