@@ -9,9 +9,10 @@ interface MyMusicLibraryProps {
   onPlayTrack: (track: Track) => void;
   currentTrack: Track | null;
   isPlaying: boolean;
+  onViewChange?: (view: string) => void;
 }
 
-export default function MyMusicLibrary({ onPlayTrack, currentTrack, isPlaying }: MyMusicLibraryProps) {
+export default function MyMusicLibrary({ onPlayTrack, currentTrack, isPlaying, onViewChange }: MyMusicLibraryProps) {
   const { savedTracks, loading, updateTrackVisibility, deleteTrack } = useSavedTracks();
   const { usage } = useUserUsage();
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
