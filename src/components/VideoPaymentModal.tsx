@@ -365,7 +365,7 @@ export default function VideoPaymentModal({ isOpen, onClose, selectedPackage }: 
                 <strong>Transaction ID:</strong> {transactionId}
               </p>
               <p className="text-gray-300 text-sm">
-                <strong>Video Generations:</strong> 5 videos
+                <strong>Video Generations:</strong> {selectedPackage?.generations} videos
               </p>
             </div>
             <button

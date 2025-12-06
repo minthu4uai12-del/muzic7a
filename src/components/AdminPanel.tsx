@@ -25,22 +25,28 @@ export default function AdminPanel() {
 
   const handleApprove = async (orderId: string) => {
     setActionLoading(true);
-    const success = await approveOrder(orderId, adminNotes);
-    if (success) {
-      setSelectedOrder(null);
-      setAdminNotes('');
+    try {
+      const success = await approveOrder(orderId, adminNotes);
+      if (success) {
+        setSelectedOrder(null);
+        setAdminNotes('');
+      }
+    } finally {
+      setActionLoading(false);
     }
-    setActionLoading(false);
   };
 
   const handleReject = async (orderId: string) => {
     setActionLoading(true);
-    const success = await rejectOrder(orderId, adminNotes);
-    if (success) {
-      setSelectedOrder(null);
-      setAdminNotes('');
+    try {
+      const success = await rejectOrder(orderId, adminNotes);
+      if (success) {
+        setSelectedOrder(null);
+        setAdminNotes('');
+      }
+    } finally {
+      setActionLoading(false);
     }
-    setActionLoading(false);
   };
 
   const getStatusColor = (status: string) => {

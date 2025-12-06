@@ -47,9 +47,7 @@ export interface PaymentTransaction {
 
 export interface AdminUser {
   id: string;
-  role: 'admin' | 'super_admin';
-  permissions: string[];
+  role: 'admin' | 'moderator';
   is_active: boolean;
   created_at: string;
-  updated_at: string;
 }

@@ -127,21 +127,18 @@ export function useAdmin() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase.rpc('approve_payment_order', {
-        order_id_param: orderId,
-        admin_id_param: user.id,
-        admin_notes_param: adminNotes || null
-      });
+      const { error } = await supabase
+        .from('payment_orders')
+        .update({
+          status: 'approved',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
 
       if (error) throw error;
 
-      if (data.success) {
-        await loadAllOrders();
-        return true;
-      } else {
-        setError(data.error);
-        return false;
-      }
+      await loadAllOrders();
+      return true;
     } catch (err) {
       console.error('Error approving order:', err);
       setError('Failed to approve order');
