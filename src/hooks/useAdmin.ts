@@ -85,33 +85,7 @@ export function useAdmin() {
 
       if (error) throw error;
 
-      // Get user details from both auth.users and user_profiles
-      const ordersWithUserDetails = await Promise.all(
-        (data || []).map(async (order) => {
-          try {
-            // Get user profile data separately
-            const { data: profileData } = await supabase
-              .from('user_profiles')
-              .select('username, display_name, avatar_url')
-              .eq('id', order.user_id)
-              .maybeSingle();
-
-            return {
-              ...order,
-              user_email: profileData?.display_name || profileData?.username || 'Unknown User',
-              user_profiles: profileData
-            };
-          } catch {
-            return {
-              ...order,
-              user_email: 'Unknown User',
-              user_profiles: null
-            };
-          }
-        })
-      );
-
-      setAllOrders(ordersWithUserDetails);
+      setAllOrders(data || []);
     } catch (err) {
       console.error('Error loading all orders:', err);
       setError('Failed to load orders');
